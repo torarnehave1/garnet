@@ -42,6 +42,7 @@ export interface DockProps {
   typeOptions: Option[]
   tagLabel: string
   onTags: () => void
+  onBulkTag: () => void
   onPlay: () => void
   onSlide: (k: number) => void
   onRefresh: () => void
@@ -116,6 +117,9 @@ export function Dock(p: DockProps) {
         />
       </div>
       <div className="opts">
+        <button className="ghost" type="button" disabled={!snap.N || snap.skeleton} title="Add a meta area to, or take one off, every graph shown" onClick={p.onBulkTag}>
+          Meta area on {snap.N} shown…
+        </button>{' '}
         <button className="ghost" type="button" disabled={p.refreshing} onClick={p.onRefresh}>
           {p.refreshing ? 'Refreshing…' : 'Refresh from VEGR.AI'}
         </button>

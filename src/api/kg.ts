@@ -106,3 +106,17 @@ export async function restoreGraph(user: User, id: string): Promise<void> {
   await mcpCall(user, 'restore_graph', { graphId: id })
   nodeCache.clear()
 }
+
+// The meta-area string as stored right now (not the index copy, which may be minutes old).
+export async function readMetaArea(user: User, id: string): Promise<string> {
+  const g = await mcpCall<{ metaArea?: string | null }>(user, 'get_graph', { graphId: id })
+  return g.metaArea || ''
+}
+
+// Writes the COMPLETE meta-area string (the server replaces the old one) and answers what it stored.
+export async function writeMetaArea(user: User, id: string, metaArea: string): Promise<string> {
+  const a = await mcpCall<{ metaArea?: string | null }>(user, 'update_graph_metadata', { graphId: id, fields: { metaArea } })
+  graphCache.delete(id)
+  nodeCache.clear()
+  return a.metaArea ?? metaArea
+}

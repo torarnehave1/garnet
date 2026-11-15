@@ -3,6 +3,7 @@ import { clearUser, completeMagicLink, magicInUrl, readUser } from './api/auth'
 import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, renameGraph, restoreGraph } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
+import { BulkTag } from './components/BulkTag'
 import { Card } from './components/Card'
 import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
@@ -16,6 +17,7 @@ import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './
 import {
   DEFAULT_FILTERS,
   monthOf,
+  parseTags,
   shownRows,
   sinceOptions,
   stamp,
@@ -177,6 +179,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [menu, setMenu] = useState<{ g: GraphItem; x: number; y: number } | null>(null)
   const [dialog, setDialog] = useState<DialogSpec | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   const eff = useMemo(() => reconcile(filters, rows), [filters, rows])
   const effRef = useRef(eff)
@@ -502,6 +505,23 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         <ContextMenu graph={menu.g} x={menu.x} y={menu.y} onRename={() => askRename(menu.g)} onDelete={() => askDelete(menu.g)} />
       )}
       {dialog && <Dialog spec={dialog} why={why} onClose={() => setDialog(null)} />}
+      {bulkOpen && (
+        <BulkTag
+          user={user}
+          rows={shownRows(rows, eff)}
+          tags={tags.map((t) => t[0])}
+          why={why}
+          onClose={() => setBulkOpen(false)}
+          onChanged={(changes) => {
+            // New meta areas from the server's answers: the picture and the saved copy follow.
+            const by = new Map(changes.map((c) => [c.id, c.metaArea]))
+            const next = rowsRef.current.map((r) => (by.has(r.id) ? { ...r, tags: parseTags(by.get(r.id)) } : r))
+            writeCache(scope, user, next)
+            keep.current = true
+            setRows(next)
+          }}
+        />
+      )}
       {tagOpen && (
         <TagPanel
           counts={tags}
@@ -561,6 +581,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           typeOptions={typeOptions}
           tagLabel={tagLabel}
           onTags={() => setTagOpen(true)}
+          onBulkTag={() => setBulkOpen(true)}
           onPlay={() => {
             if (!engine) return
             if (engine.playing) engine.pause()

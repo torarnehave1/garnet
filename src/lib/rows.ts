@@ -128,3 +128,34 @@ export function stamp(ms: number) {
   const d = new Date(ms)
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
+
+// A meta area as the person typed it → "#LIKETHIS": upper case, one leading #, single spaces.
+export function normTag(s: string): string {
+  const t = s.replace(/#/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase()
+  return t ? '#' + t : ''
+}
+
+// The stored meta-area string split into its tags as written (case kept), so a change touches
+// only the one tag it is about.
+function rawTags(raw: string | null | undefined): string[] {
+  const s = (raw || '').trim()
+  if (!s || s === '(none)') return []
+  return (s.indexOf('#') >= 0 ? s.split('#') : [s]).map((p) => p.trim()).filter(Boolean)
+}
+
+// The whole new string with the tag added, or null when the graph already has it.
+export function withTag(raw: string | null | undefined, tag: string): string | null {
+  const body = tag.replace(/^#/, '')
+  const have = rawTags(raw)
+  if (have.some((p) => p.toUpperCase() === body)) return null
+  return [...have, body].map((p) => '#' + p).join(' ')
+}
+
+// The whole new string without the tag, or null when the graph does not have it.
+export function withoutTag(raw: string | null | undefined, tag: string): string | null {
+  const body = tag.replace(/^#/, '')
+  const have = rawTags(raw)
+  const keep = have.filter((p) => p.toUpperCase() !== body)
+  if (keep.length === have.length) return null
+  return keep.map((p) => '#' + p).join(' ')
+}
