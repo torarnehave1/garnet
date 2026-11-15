@@ -1,0 +1,128 @@
+import type { KgEdge, KgNode } from './types'
+
+// The name to show for a node. A YouTube node keeps its video in the name itself, as
+// ![YOUTUBE src=URL]Title[END YOUTUBE]; Garnet shows only the title. The graph is never
+// changed for this: views that play the video read the address from that same name.
+export function nodeName(label: unknown): string {
+  let t = String(label || '').trim()
+  const m = /!\[YOUTUBE\s+src=[^\]]*\]([\s\S]*?)(?:\[END\s+YOUTUBE\]|$)/.exec(t)
+  if (m) t = m[1].trim() || 'YouTube video'
+  return t || '(no label)'
+}
+
+// A flow graph (nodes of type flow-step): the order of its steps, read from the edges.
+// Starts at the node of type "flow", or at the steps nothing points to. [] when not a flow.
+export function flowOrder(ns: KgNode[], es: KgEdge[]): string[] {
+  const steps = ns.filter((n) => n.type === 'flow-step')
+  if (steps.length < 2) return []
+  const typ: Record<string, string> = {}
+  const out: Record<string, string[]> = {}
+  const inc: Record<string, number> = {}
+  ns.forEach((n) => {
+    typ[n.id] = n.type || ''
+    out[n.id] = []
+    inc[n.id] = 0
+  })
+  es.forEach((e) => {
+    if (out[e.source] && out[e.target] && e.source !== e.target) {
+      out[e.source].push(e.target)
+      inc[e.target]++
+    }
+  })
+  let stack = ns.filter((n) => n.type === 'flow').map((n) => n.id)
+  if (!stack.length) stack = steps.filter((n) => !inc[n.id]).map((n) => n.id)
+  stack.reverse()
+  const seen = new Set<string>()
+  const seq: string[] = []
+  while (stack.length) {
+    const id = stack.pop()!
+    if (seen.has(id)) continue
+    seen.add(id)
+    if (typ[id] === 'flow' || typ[id] === 'flow-step') seq.push(id)
+    for (let j = out[id].length - 1; j >= 0; j--) if (!seen.has(out[id][j])) stack.push(out[id][j])
+  }
+  steps.forEach((n) => {
+    if (!seen.has(n.id)) seq.push(n.id)
+  })
+  return seq
+}
+
+// A graph with tasks (type oppgave) and no flow: the tasks stand in the same kind of column.
+// No order between tasks, no numbers. The node that points to most tasks stands first.
+export function taskOrder(ns: KgNode[], es: KgEdge[]): string[] {
+  const tasks = ns.filter((n) => n.type === 'oppgave')
+  if (tasks.length < 2) return []
+  const isTask = new Set(tasks.map((n) => n.id))
+  const points: Record<string, number> = {}
+  es.forEach((e) => {
+    if (isTask.has(e.target) && !isTask.has(e.source)) points[e.source] = (points[e.source] || 0) + 1
+  })
+  let head = ''
+  let best = 1
+  ns.forEach((n) => {
+    if ((points[n.id] || 0) > best) {
+      best = points[n.id]
+      head = n.id
+    }
+  })
+  return [...(head ? [head] : []), ...tasks.map((n) => n.id)]
+}
+
+export type StatusKind = '' | 'open' | 'doing' | 'done'
+export const STATUS_COLOR: Record<string, string> = { open: '#f85149', doing: '#e3a008', done: '#3fb950' }
+export function statusKind(s: unknown): StatusKind {
+  const v = String(s || '').toLowerCase().trim()
+  if (/^(utført|utfort|ferdig|done|fullført)$/.test(v)) return 'done'
+  if (/^(pågår|pagar|in progress|doing)$/.test(v)) return 'doing'
+  if (/^(åpen|apen|open)$/.test(v)) return 'open'
+  return ''
+}
+
+function esc(t: unknown) {
+  return String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
+}
+
+interface Explanation {
+  by?: string
+  reviewed?: boolean
+  reviewedBy?: string
+}
+interface Reference {
+  author?: string
+  year?: string | number
+  title?: string
+  checked?: boolean
+}
+
+// The node's own text, as plain paragraphs (escaped HTML). Keyword nodes also show who
+// explained them and the references.
+export function textHtml(node: KgNode): string {
+  const m = (node.metadata || {}) as { explanation?: Explanation; references?: Reference[] }
+  const ex = m.explanation || {}
+  const refs = Array.isArray(m.references) ? m.references : []
+  const type = node.type || 'fulltext'
+  const info = String(node.info || '')
+  if (type === 'html-node' || /^\s*<(!doctype|html)/i.test(info)) return '<p>This node is a web page. Open the graph to see it.</p>'
+  let h = ''
+  if (!info.trim()) h += '<p>This node has no text.</p>'
+  const cut = info.length > 2400
+  ;(cut ? info.slice(0, 2400) : info).split(/\n\s*\n/).forEach((par) => {
+    const p = esc(par.trim().replace(/^#{1,6}\s*/gm, ''))
+    if (!p) return
+    h += '<p>' + p.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*\n]+)\*/g, '<i>$1</i>').replace(/\n/g, '<br>') + '</p>'
+  })
+  if (cut) h += '<p>… The text continues in the graph.</p>'
+  if (ex.by)
+    h +=
+      '<span class="mark">' +
+      (ex.by === 'ai' ? 'Explained with AI' : 'Explained by ' + esc(ex.reviewedBy || ex.by)) +
+      ' · ' +
+      (ex.reviewed ? 'reviewed' + (ex.reviewedBy ? ' by ' + esc(ex.reviewedBy) : '') : 'not reviewed by a person yet') +
+      '</span>'
+  if (refs.length)
+    h +=
+      '<div class="refs">References: ' +
+      refs.map((r) => esc(r.author || '') + (r.year ? ' (' + esc(r.year) + ')' : '') + (r.title ? ', ' + esc(r.title) : '') + (r.checked ? '' : ' – not checked')).join('; ') +
+      '</div>'
+  return h
+}

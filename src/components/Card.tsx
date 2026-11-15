@@ -1,0 +1,76 @@
+import { useEffect, useState } from 'react'
+import { loadGraph } from '../api/kg'
+import type { Item } from '../engine/Engine'
+import { textHtml } from '../lib/graphRules'
+import { dayOf, SHARED } from '../lib/rows'
+import type { User } from '../lib/types'
+
+const VIEW = 'https://editor.vegvisr.org/view?graphId='
+
+// The node's own text, read from the graph (already cached when the node is drawn).
+function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; user: User | null }) {
+  const [html, setHtml] = useState('<p>Loading the text…</p>')
+  useEffect(() => {
+    let live = true
+    setHtml('<p>Loading the text…</p>')
+    loadGraph(user, graphId)
+      .then((g) => {
+        const node = g.nodes.find((n) => n.id === nodeId)
+        if (live) setHtml(node ? textHtml(node) : '<p>The node was not found in the graph.</p>')
+      })
+      .catch((e) => {
+        if (live) setHtml('<p>Could not load the text from the graph (' + String(e?.message || 'unknown error').replace(/[<>&]/g, '') + ').</p>')
+      })
+    return () => {
+      live = false
+    }
+  }, [graphId, nodeId, user])
+  // textHtml escapes everything it takes from the graph before adding its own tags.
+  return <div className="cardBody" dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+export function Card({ item, user, N, skeleton, scopeAll, onClose }: { item: Item | null; user: User | null; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void }) {
+  if (!item) return null
+  let title = ''
+  let meta = ''
+  let body = null
+  let link: { href: string; text: string } | null = null
+  if (item.kind === 'h') {
+    title = item.tag
+    meta = skeleton ? `${item.seed} graphs on 13 Nov 2026` : `${item.vis} of ${item.members.length} graphs shown at this point in the history`
+  } else if (item.kind === 'n') {
+    title = item.label
+    meta = 'Node' + (item.type ? ' of type ' + item.type : '') + ' in the graph ' + item.parent.title + (item.links.length ? ` · ${item.links.length} edges` : '')
+    body = <NodeText graphId={item.parent.id} nodeId={item.nid} user={user} />
+    link = { href: VIEW + encodeURIComponent(item.parent.id), text: 'Open the graph in VEGR.AI' }
+  } else {
+    const d = item
+    title = d.title
+    meta =
+      (d.t ? 'Created ' + dayOf(d.t) + ' · ' : '') +
+      `Graph ${d.order + 1} of ${N} · ${d.n} nodes · ${d.status} · ` +
+      (d.tags.length ? d.tags.join(' ') : 'no meta area') +
+      (scopeAll ? ' · World: ' + (d.world || SHARED) : '') +
+      (d.sem.length ? ` · ${d.sem.length} semantic links` : '') +
+      (d.types.length ? ' · node types: ' + d.types.join(', ') : '') +
+      (d.live ? ' · live at ' + d.live : '')
+    link = { href: VIEW + encodeURIComponent(d.id), text: 'Open in VEGR.AI' }
+  }
+  return (
+    <div className="card">
+      <button className="x" type="button" aria-label="Close" onClick={onClose}>
+        ×
+      </button>
+      <h2>{title}</h2>
+      <p>{meta}</p>
+      {body}
+      {link && (
+        <p>
+          <a href={link.href} target="_blank" rel="noopener">
+            {link.text}
+          </a>
+        </p>
+      )}
+    </div>
+  )
+}
