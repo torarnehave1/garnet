@@ -1,0 +1,65 @@
+{
+ "id": "e214a9f7-568f-4831-8762-fd9d41074428",
+ "override": false,
+ "graphData": {
+  "metadata": {
+   "title": "Email Templates — garnet.vegr.ai",
+   "description": "Per-host email templates (SSOT) for garnet.vegr.ai. Read by email-worker at send time, before the vegr.ai templates.",
+   "createdBy": "post@vegr.ai",
+   "metaArea": "#EMAIL-garnet.vegr.ai #GARNET",
+   "category": "#Email",
+   "publicationState": "private",
+   "version": 0
+  },
+  "nodes": [
+   {
+    "id": "email-brand",
+    "label": "Garnet email brand",
+    "type": "email-brand",
+    "info": "",
+    "color": "#0b1220",
+    "bibl": [],
+    "position": {},
+    "visible": true,
+    "metadata": {
+     "name": "Garnet",
+     "logo": "https://vegvisr.imgix.net/1794759549079-1.png",
+     "accent": "#f2b45a",
+     "fromName": "Garnet · VEGR.AI",
+     "footer": "Garnet er en del av VEGR.AI — utviklet av Universi AS · universi.no"
+    }
+   },
+   {
+    "id": "login-no",
+    "label": "Email — login (no)",
+    "type": "email-template",
+    "info": "<!-- edit:email-body:start -->\n<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;color:#111;background:#ffffff\">\n  <div style=\"background:#0b1220;border-radius:12px 12px 0 0;padding:28px 24px;text-align:center\">\n    <img src=\"{brandLogo}\" width=\"72\" height=\"72\" alt=\"{brandName}\" style=\"display:block;margin:0 auto 12px;border-radius:16px\">\n    <div style=\"color:#e8eef7;font-family:Georgia,serif;font-size:24px;font-weight:bold\">{brandName}</div>\n    <div style=\"color:#8fa0b8;font-family:Georgia,serif;font-style:italic;font-size:14px;margin-top:2px\">De som bøter garnet</div>\n  </div>\n  <div style=\"border:1px solid #e5e7eb;border-top:0;border-radius:0 0 12px 12px;padding:24px\">\n    <p style=\"margin:0 0 12px;font-size:16px\">Klikk knappen under for å logge inn i {brandName}. Lenken utløper om {expiryMinutes} minutter.</p>\n    <p style=\"text-align:center;margin:28px 0\"><a href=\"{magicLink}\" style=\"display:inline-block;background:{brandAccent};color:#0b1220;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:bold\">Åpne {brandName}</a></p>\n    <p style=\"margin:0 0 12px;color:#555;font-size:14px\">Hvis du ikke ba om denne e-posten, kan du se bort fra den.</p>\n    <p style=\"font-size:12px;color:#888;border-top:1px solid #eee;padding-top:12px;margin:16px 0 0;text-align:center\">{brandFooter}</p>\n  </div>\n</div>\n<!-- edit:email-body:end -->",
+    "color": "#1a4a6e",
+    "bibl": [],
+    "position": {},
+    "visible": true,
+    "metadata": {
+     "purpose": "login",
+     "language": "no",
+     "subject": "Logg inn i {brandName}"
+    }
+   },
+   {
+    "id": "login-en",
+    "label": "Email — login (en)",
+    "type": "email-template",
+    "info": "<!-- edit:email-body:start -->\n<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;color:#111;background:#ffffff\">\n  <div style=\"background:#0b1220;border-radius:12px 12px 0 0;padding:28px 24px;text-align:center\">\n    <img src=\"{brandLogo}\" width=\"72\" height=\"72\" alt=\"{brandName}\" style=\"display:block;margin:0 auto 12px;border-radius:16px\">\n    <div style=\"color:#e8eef7;font-family:Georgia,serif;font-size:24px;font-weight:bold\">{brandName}</div>\n    <div style=\"color:#8fa0b8;font-family:Georgia,serif;font-style:italic;font-size:14px;margin-top:2px\">De som bøter garnet</div>\n  </div>\n  <div style=\"border:1px solid #e5e7eb;border-top:0;border-radius:0 0 12px 12px;padding:24px\">\n    <p style=\"margin:0 0 12px;font-size:16px\">Click the button below to sign in to {brandName}. The link expires in {expiryMinutes} minutes.</p>\n    <p style=\"text-align:center;margin:28px 0\"><a href=\"{magicLink}\" style=\"display:inline-block;background:{brandAccent};color:#0b1220;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:bold\">Open {brandName}</a></p>\n    <p style=\"margin:0 0 12px;color:#555;font-size:14px\">If you did not ask for this email, you can ignore it.</p>\n    <p style=\"font-size:12px;color:#888;border-top:1px solid #eee;padding-top:12px;margin:16px 0 0;text-align:center\">{brandFooter}</p>\n  </div>\n</div>\n<!-- edit:email-body:end -->",
+    "color": "#1a4a6e",
+    "bibl": [],
+    "position": {},
+    "visible": true,
+    "metadata": {
+     "purpose": "login",
+     "language": "en",
+     "subject": "Sign in to {brandName}"
+    }
+   }
+  ],
+  "edges": []
+ }
+}

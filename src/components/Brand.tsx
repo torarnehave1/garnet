@@ -12,10 +12,13 @@ const C: [number, number, number, string][] = [
   [32, 53, 2.1, '#6fd3c7'],
 ]
 
-export function Brand({ big = false }: { big?: boolean }) {
+export function Brand({ big = false, name = 'Garnet', slogan = 'De som bøter garnet', logoUrl = '' }: { big?: boolean; name?: string; slogan?: string; logoUrl?: string }) {
   const size = big ? 64 : 44
   return (
     <div className={big ? 'brand big' : 'brand'}>
+      {logoUrl ? (
+        <img src={logoUrl} width={size} height={size} alt="" style={{ borderRadius: size / 4.5 }} />
+      ) : (
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
         <g stroke="#cfe0ff" strokeOpacity=".55" strokeWidth="1.3" strokeLinecap="round">
           {L.map(([x1, y1, x2, y2], i) => (
@@ -27,9 +30,10 @@ export function Brand({ big = false }: { big?: boolean }) {
           <circle key={i} cx={cx} cy={cy} r={r} fill={f} />
         ))}
       </svg>
+      )}
       <div>
-        <h1>Garnet</h1>
-        <div className="sub">De som bøter garnet</div>
+        <h1>{name}</h1>
+        <div className="sub">{slogan}</div>
       </div>
     </div>
   )

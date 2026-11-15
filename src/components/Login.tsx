@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { sendMagicLink } from '../api/auth'
+import { DEFAULT_BRAND, loadBrand, type Brand as BrandData } from '../api/brand'
 import { Brand } from './Brand'
 
 // Garnet's own sign-in page: one email field, a magic link by email. Same flow as Contacts.
@@ -8,6 +9,10 @@ export function Login({ error }: { error?: string }) {
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(error || '')
+  const [b, setB] = useState<BrandData>(DEFAULT_BRAND)
+  useEffect(() => {
+    loadBrand().then(setB)
+  }, [])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,13 +33,13 @@ export function Login({ error }: { error?: string }) {
     <main className="login">
       <div className="loginNet" aria-hidden="true" />
       <section className="loginCard" aria-labelledby="loginTitle">
-        <Brand big />
+        <Brand big name={b.name} slogan={b.slogan} logoUrl={b.logoUrl} />
         <p className="loginLead" id="loginTitle">
-          The VEGR.AI knowledge graphs as one growing network. Sign in with your VEGR.AI email.
+          {b.login.lead}
         </p>
         {sent ? (
           <div className="loginSent" role="status">
-            <h2>Check your inbox</h2>
+            <h2>{b.login.sentTitle}</h2>
             <p>
               A sign-in link is on its way to <b>{email}</b>. Open it on this device to come back here signed in.
             </p>
@@ -67,12 +72,12 @@ export function Login({ error }: { error?: string }) {
                 {err}
               </p>
             )}
-            <button type="submit" disabled={busy || !email.trim()}>
-              {busy ? 'Sending link…' : 'Send sign-in link'}
+            <button type="submit" disabled={busy || !email.trim()} style={{ background: b.accent }}>
+              {busy ? 'Sending link…' : b.login.button}
             </button>
           </form>
         )}
-        <p className="loginFoot">Garnet reads and changes graphs only as you, with your own VEGR.AI access.</p>
+        <p className="loginFoot">{b.login.footer}</p>
       </section>
     </main>
   )
