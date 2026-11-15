@@ -433,6 +433,17 @@ export class Engine {
     this.setK(this.N)
   }
 
+  // Task state lives in each task node's own data (metadata.status), which the node index does
+  // not carry. Graphs with tasks are read whole afterwards and their tasks coloured here.
+  graphsWithTasks(): string[] {
+    const ids = new Set<string>()
+    for (const o of this.inner) if (o.type === 'oppgave') ids.add(o.parent.id)
+    return [...ids]
+  }
+  setTaskStatus(graphId: string, byNode: Record<string, unknown>) {
+    for (const o of this.inner) if (o.type === 'oppgave' && o.parent.id === graphId) o.status = statusKind(byNode[o.nid])
+  }
+
   /* ---------- time ---------- */
   setK(v: number) {
     this.k = Math.max(0, Math.min(this.N, v))

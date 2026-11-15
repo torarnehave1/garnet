@@ -1,196 +1,108 @@
-import type { KgGraph, Row, User } from '../lib/types'
+import type { KgGraph, Row, Scope, User } from '../lib/types'
 import { parseTags } from '../lib/rows'
+import { mcpCall } from './mcp'
 
-// Garnet asks https://knowledge.vegvisr.org directly, with the signed-in person's token.
-export const KG = 'https://knowledge.vegvisr.org'
+// Every read and write goes through the MCP server as the signed-in person. The server decides
+// what that person may see and change (owner checks on rename and delete included).
 
-export class KgError extends Error {
-  status: number
-  constructor(message: string, status: number) {
-    super(message)
-    this.status = status
-  }
-}
-
-function readHeaders(user: User | null): HeadersInit {
-  const h: Record<string, string> = { Accept: 'application/json' }
-  if (user?.token) h['X-API-Token'] = user.token
-  return h
-}
-function writeHeaders(user: User): HeadersInit {
-  if (!user.token) throw new KgError('Sign in to change graphs.', 401)
-  return {
-    'Content-Type': 'application/json',
-    'X-API-Token': user.token,
-    'X-Session-Token': user.token,
-    'x-user-email': user.email,
-    'x-user-role': user.role || 'User',
-  }
-}
-
-async function json<T>(r: Response): Promise<T> {
-  let body: unknown = null
-  try {
-    body = await r.json()
-  } catch {
-    /* no JSON body */
-  }
-  if (!r.ok) {
-    const e = body && typeof body === 'object' ? (body as { error?: unknown }).error : undefined
-    const msg = e ? String(e) : r.statusText
-    throw new KgError(msg || 'HTTP ' + r.status, r.status)
-  }
-  return body as T
-}
-
-interface SummaryResult {
-  id: string
+interface IndexRow {
+  graphId: string
   title?: string
+  metaArea?: string | null
+  publicationState?: string
+  nodeCount?: number
   createdAt?: string
   updatedAt?: string
-  nodeCount?: number
+  world?: string | null
   nodeTypes?: string[]
   publishedDomains?: string[]
-  world?: string
-  metadata?: { metaArea?: string; publicationState?: string; createdBy?: string; version?: number }
+  nodes?: { id: string; label?: string; type?: string }[]
+  edges?: { source: string; target: string }[]
 }
-interface SummaryPage {
-  results: SummaryResult[]
-  total: number
-  hasMore?: boolean
+interface IndexAnswer {
+  total?: number
+  graphs: IndexRow[]
 }
 
-function toRow(g: SummaryResult): Row {
-  const m = g.metadata || {}
+function toRow(g: IndexRow): Row {
   return {
-    id: g.id,
+    id: g.graphId,
     title: g.title || '(untitled)',
     n: g.nodeCount || 0,
-    status: m.publicationState || 'private',
-    tags: parseTags(m.metaArea),
+    status: g.publicationState || 'private',
+    tags: parseTags(g.metaArea),
     live: (g.publishedDomains || []).join(', '),
     created: g.createdAt || '',
     updated: g.updatedAt || '',
     world: g.world || '',
     types: g.nodeTypes || [],
-    createdBy: m.createdBy || '',
-    version: typeof m.version === 'number' ? m.version : null,
+    createdBy: '',
+    version: null,
   }
 }
 
-// Every graph the person can see, 250 a page. "Mine" is worked out here: the endpoint
-// has no filter for the person's own graphs, so createdBy is compared with the email.
-export async function loadSummaries(
-  user: User | null,
-  mine: boolean,
-  onProgress: (n: number, total: number) => void,
-): Promise<Row[]> {
-  const out: Row[] = []
-  const seen = new Set<string>()
-  const step = 250
-  let offset = 0
-  let total = Infinity
-  while (offset < total && offset < 20000) {
-    const r = await fetch(`${KG}/getknowgraphsummaries?limit=${step}&offset=${offset}`, { headers: readHeaders(user) })
-    const page = await json<SummaryPage>(r)
-    if (typeof page.total === 'number') total = page.total
-    const rows = page.results || []
-    for (const g of rows) {
-      if (!g || !g.id || seen.has(g.id)) continue
-      seen.add(g.id)
-      out.push(toRow(g))
-    }
-    offset += step
-    onProgress(out.length, total)
-    if (!rows.length || page.hasMore === false) break
-  }
-  if (!mine || !user) return out
-  const me = user.email.toLowerCase()
-  return out.filter((r) => r.createdBy.toLowerCase() === me)
+// All graphs in one request: "mine", or everything the person can see across all Worlds.
+export async function loadIndex(user: User, scope: Scope): Promise<Row[]> {
+  const a = await mcpCall<IndexAnswer>(user, 'graph_index', { scope })
+  return (a.graphs || []).filter((g) => g && g.graphId).map(toRow)
 }
 
-// Whole graphs, kept for the session. Nodes, edges, task status and node text all come from here.
+// Nodes (id, label, type) and edges of every graph under one meta area or holding one node type,
+// in one request. Kept for the session, so choosing the same filter again draws at once.
+const nodeCache = new Map<string, Promise<Record<string, KgGraph>>>()
+export function loadNodes(user: User, scope: Scope, tag: string, type: string): Promise<Record<string, KgGraph>> {
+  const key = `${scope}|${tag}|${type}`
+  let p = nodeCache.get(key)
+  if (!p) {
+    const args: Record<string, unknown> = { scope, includeNodes: true }
+    if (tag) args.metaArea = tag
+    if (type) args.nodeType = type
+    p = mcpCall<IndexAnswer>(user, 'graph_index', args).then((a) => {
+      const by: Record<string, KgGraph> = {}
+      for (const g of a.graphs || []) by[g.graphId] = { nodes: g.nodes || [], edges: g.edges || [] }
+      return by
+    })
+    p.catch(() => nodeCache.delete(key))
+    nodeCache.set(key, p)
+  }
+  return p
+}
+
+// One whole graph: node text, and task status (metadata.status), which the index does not carry.
 const graphCache = new Map<string, Promise<KgGraph>>()
-export function clearGraphCache() {
-  graphCache.clear()
-}
-export function loadGraph(user: User | null, id: string): Promise<KgGraph> {
+export function loadGraph(user: User, id: string): Promise<KgGraph> {
   let p = graphCache.get(id)
   if (!p) {
-    p = fetch(`${KG}/getknowgraph?id=${encodeURIComponent(id)}`, { headers: readHeaders(user) })
-      .then((r) => json<KgGraph>(r))
-      .then((g) => ({ metadata: g.metadata || {}, nodes: Array.isArray(g.nodes) ? g.nodes : [], edges: Array.isArray(g.edges) ? g.edges : [] }))
+    p = mcpCall<{ nodes?: KgGraph['nodes']; edges?: KgGraph['edges']; version?: number }>(user, 'get_graph', { graphId: id }).then((g) => ({
+      metadata: { version: g.version },
+      nodes: Array.isArray(g.nodes) ? g.nodes : [],
+      edges: Array.isArray(g.edges) ? g.edges : [],
+    }))
     p.catch(() => graphCache.delete(id))
     graphCache.set(id, p)
   }
   return p
 }
 
-// Several graphs at once, a few requests at a time. There is no endpoint that returns
-// the nodes of many graphs in one request.
-export async function loadGraphs(
-  user: User | null,
-  ids: string[],
-  onProgress: (done: number, total: number) => void,
-  isCurrent: () => boolean,
-): Promise<Record<string, KgGraph>> {
-  const out: Record<string, KgGraph> = {}
-  let next = 0
-  let done = 0
-  let failed = 0
-  async function worker() {
-    while (next < ids.length && isCurrent()) {
-      const id = ids[next++]
-      try {
-        out[id] = await loadGraph(user, id)
-      } catch {
-        failed++
-      }
-      done++
-      onProgress(done, ids.length)
-    }
-  }
-  await Promise.all(Array.from({ length: 6 }, worker))
-  if (failed && failed === ids.length) throw new Error('none of the graphs could be read')
-  return out
+export function clearCaches() {
+  nodeCache.clear()
+  graphCache.clear()
 }
 
-export async function renameGraph(user: User, id: string, title: string, version: number | null): Promise<void> {
-  let v = version
-  if (v == null) v = Number((await loadGraph(user, id)).metadata?.version) || 0
-  const r = await fetch(`${KG}/patchGraphMetadata`, {
-    method: 'POST',
-    headers: writeHeaders(user),
-    body: JSON.stringify({ graphId: id, fields: { title }, expectedVersion: v }),
-  })
-  await json(r)
+export async function renameGraph(user: User, id: string, title: string): Promise<void> {
+  await mcpCall(user, 'update_graph_metadata', { graphId: id, fields: { title } })
   graphCache.delete(id)
+  nodeCache.clear()
 }
 
 export async function deleteGraph(user: User, id: string): Promise<void> {
-  const r = await fetch(`${KG}/deleteknowgraph`, { method: 'POST', headers: writeHeaders(user), body: JSON.stringify({ id }) })
-  await json(r)
+  await mcpCall(user, 'delete_graph', { graphId: id })
   graphCache.delete(id)
+  nodeCache.clear()
 }
 
-// /deleteknowgraph answers without the trash entry, so Undo finds it in /getTrash by graph id.
-interface TrashEntry {
-  id: string
-  graph_id: string
-  expires_at?: string
-  deleted_at?: string
-}
-export async function findTrash(user: User, graphId: string): Promise<TrashEntry | null> {
-  const r = await fetch(`${KG}/getTrash`, { headers: writeHeaders(user) })
-  const body = await json<{ results?: TrashEntry[] }>(r)
-  const hits = (body.results || []).filter((e) => e.graph_id === graphId)
-  hits.sort((a, b) => String(b.deleted_at || '').localeCompare(String(a.deleted_at || '')))
-  return hits[0] || null
-}
-
-export async function restoreGraph(user: User, graphId: string): Promise<void> {
-  const entry = await findTrash(user, graphId)
-  if (!entry) throw new KgError('The graph was not found in the trash.', 404)
-  const r = await fetch(`${KG}/restoreGraph`, { method: 'POST', headers: writeHeaders(user), body: JSON.stringify({ trashId: entry.id }) })
-  await json(r)
+// Brings back the newest trash entry of this graph.
+export async function restoreGraph(user: User, id: string): Promise<void> {
+  await mcpCall(user, 'restore_graph', { graphId: id })
+  nodeCache.clear()
 }

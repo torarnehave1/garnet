@@ -12,10 +12,11 @@ const C: [number, number, number, string][] = [
   [32, 53, 2.1, '#6fd3c7'],
 ]
 
-export function Brand() {
+export function Brand({ big = false }: { big?: boolean }) {
+  const size = big ? 64 : 44
   return (
-    <div className="brand">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="44" height="44" aria-hidden="true">
+    <div className={big ? 'brand big' : 'brand'}>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
         <g stroke="#cfe0ff" strokeOpacity=".55" strokeWidth="1.3" strokeLinecap="round">
           {L.map(([x1, y1, x2, y2], i) => (
             <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />

@@ -31,7 +31,26 @@ h1 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 3.4vw
 .rateText .g { color: #f2b45a; }
 .rateText .n { color: #6fd3c7; }
 
-.authbar { position: absolute; top: 12px; right: 16px; z-index: 6; max-width: calc(100% - 32px); }
+.authbar { position: absolute; top: 14px; right: 16px; z-index: 6; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 4px 4px 12px; }
+.authbar .who { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+
+/* ---------- sign-in page ---------- */
+.login { position: relative; min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto;
+  background: radial-gradient(ellipse at 30% 20%, rgba(242, 180, 90, 0.10), transparent 55%), radial-gradient(ellipse at 75% 80%, rgba(111, 211, 199, 0.10), transparent 55%), var(--bg); }
+.loginNet { position: absolute; inset: 0; opacity: 0.35; pointer-events: none;
+  background-image: radial-gradient(circle, rgba(207, 224, 255, 0.5) 1px, transparent 1.6px); background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%); }
+.loginCard { position: relative; width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px 24px; backdrop-filter: blur(8px); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45); }
+.brand.big h1 { font-size: 34px; }
+.loginLead { color: var(--muted); margin: 16px 0 20px; }
+.login form { display: flex; flex-direction: column; gap: 10px; }
+.login label { font-size: 13px; color: var(--muted); }
+.login input[type='email'] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; }
+.login button[type='submit'] { margin-top: 4px; padding: 11px 16px; }
+.loginErr { color: var(--danger); margin: 0; }
+.loginSent h2 { font-family: var(--display); font-weight: 600; font-size: 20px; margin: 0 0 6px; }
+.loginSent p { margin: 0 0 12px; }
+.loginFoot { color: var(--muted); font-size: 12px; margin: 20px 0 0; border-top: 1px solid var(--line); padding-top: 12px; }
 
 .bottom { position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 .above { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; flex-wrap: wrap-reverse; }

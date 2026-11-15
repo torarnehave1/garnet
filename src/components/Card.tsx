@@ -8,7 +8,7 @@ import type { User } from '../lib/types'
 const VIEW = 'https://editor.vegvisr.org/view?graphId='
 
 // The node's own text, read from the graph (already cached when the node is drawn).
-function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; user: User | null }) {
+function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; user: User }) {
   const [html, setHtml] = useState('<p>Loading the text…</p>')
   useEffect(() => {
     let live = true
@@ -29,7 +29,7 @@ function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; 
   return <div className="cardBody" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-export function Card({ item, user, N, skeleton, scopeAll, onClose }: { item: Item | null; user: User | null; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void }) {
+export function Card({ item, user, N, skeleton, scopeAll, onClose }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void }) {
   if (!item) return null
   let title = ''
   let meta = ''

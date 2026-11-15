@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AUTH_CHANGED, isSuperadmin, loadAuthScript, readUser } from './api/auth'
-import { clearGraphCache, deleteGraph, KgError, loadGraphs, loadSummaries, renameGraph, restoreGraph } from './api/kg'
+import { clearUser, completeMagicLink, magicInUrl, readUser } from './api/auth'
+import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, renameGraph, restoreGraph } from './api/kg'
+import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { Card } from './components/Card'
 import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
+import { Login } from './components/Login'
 import { RateChart } from './components/RateChart'
 import { TagPanel } from './components/TagPanel'
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
@@ -28,7 +30,6 @@ import type { Filters, Row, Scope, User } from './lib/types'
 /* ---------- what is kept in this browser ---------- */
 const VIEW_KEY = 'garnet-view-v1'
 const SCOPE_KEY = 'garnet-scope'
-const NODE_LIMIT = 150 // The node view reads one graph per request; past this many, ask for a narrower filter.
 
 interface SavedView {
   f: Partial<Filters>
@@ -86,14 +87,15 @@ function reconcile(f: Filters, rows: Row[]): Filters {
 
 // What went wrong, in words the person can act on.
 function why(e: unknown): string {
-  const err = e as KgError & { plain?: boolean }
+  const err = e as McpError & { plain?: boolean }
   const msg = String(err?.message || '')
   if (err?.plain) return msg
-  if (err?.status === 403 && /graph:delete/.test(msg)) return 'Your login is not allowed to delete graphs.'
-  if (err?.status === 403 && /graph:write/.test(msg)) return 'Your login is not allowed to change graphs.'
-  if (err?.status === 401) return 'Your login has run out. Sign in again and try once more.'
-  if (err?.status === 409 || /version/i.test(msg)) return 'The graph was changed a moment ago. Try again.'
-  if (err?.status === 404) return 'VEGR.AI could not find it. It may already be gone; press Refresh.'
+  if (err?.status === 401) return 'Your login is no longer valid. Sign in again and try once more.'
+  if (err?.code === 'INSUFFICIENT_SCOPE' || /INSUFFICIENT_SCOPE|graph:delete/.test(msg))
+    return 'Your VEGR.AI connection is not allowed to do this. Deleting needs the "delete graphs" permission on your Claude connection to KG Manager.'
+  if (err?.code === 'FORBIDDEN_GRAPH') return 'Only the person who created this graph (or a Superadmin) can do that.'
+  if (err?.code === 'VERSION_CONFLICT') return 'The graph was changed a moment ago. Try again.'
+  if (err?.code === 'GRAPH_NOT_FOUND' || err?.code === 'NOT_FOUND') return 'VEGR.AI could not find it. It may already be gone; press Refresh.'
   if (/live page/.test(msg)) return 'This graph serves a live page, so it was not deleted. Take the page down first.'
   return 'It did not work' + (msg ? ' (' + msg + ')' : '') + '.'
 }
@@ -103,10 +105,46 @@ function plain(message: string) {
 
 const EMPTY: Snapshot = { kk: 0, N: 0, skeleton: true, dated: false, hubCount: 0, hubsShown: 0, nodesShown: 0, nodesTotal: 0, cur: null, playing: false }
 
+// Signed in, or the Garnet sign-in page. A sign-in link brings the person back here with ?magic=.
 export default function App() {
+  const [user, setUser] = useState<User | null>(readUser)
+  const [magic] = useState(magicInUrl)
+  const [checking, setChecking] = useState(!!magic)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (!magic) return
+    completeMagicLink(magic)
+      .then(setUser)
+      .catch((e) => {
+        setError(`This sign-in link did not work (${(e as Error).message}). Ask for a new one below.`)
+        const u = new URL(window.location.href)
+        u.searchParams.delete('magic')
+        window.history.replaceState({}, '', u.toString())
+      })
+      .finally(() => setChecking(false))
+  }, [magic])
+  if (checking)
+    return (
+      <main className="login">
+        <p className="loginLead">Signing you in…</p>
+      </main>
+    )
+  if (!user) return <Login error={error} />
+  return (
+    <Garnet
+      user={user}
+      onSignOut={() => {
+        clearUser()
+        clearCaches()
+        setUser(null)
+      }}
+    />
+  )
+}
+
+function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
   const [engine, setEngine] = useState<Engine | null>(null)
-  const [user, setUser] = useState<User | null>(readUser)
   const [scope, setScope] = useState<Scope>(() => {
     try {
       return localStorage.getItem(SCOPE_KEY) === 'all' ? 'all' : 'mine'
@@ -145,6 +183,8 @@ export default function App() {
   userRef.current = user
   const scopeRef = useRef(scope)
   scopeRef.current = scope
+  const onSignOutRef = useRef(onSignOut)
+  onSignOutRef.current = onSignOut
 
   /* ---------- the canvas ---------- */
   useEffect(() => {
@@ -172,53 +212,28 @@ export default function App() {
     if (engine) engine.speed = +speed || 8
   }, [engine, speed])
 
-  /* ---------- the login ---------- */
-  useEffect(() => {
-    loadAuthScript().catch((e) => setNote(e.message))
-    const update = () =>
-      setUser((old) => {
-        const u = readUser()
-        return old && u && old.email === u.email && old.token === u.token && old.role === u.role ? old : u
-      })
-    window.addEventListener(AUTH_CHANGED, update)
-    window.addEventListener('storage', update)
-    return () => {
-      window.removeEventListener(AUTH_CHANGED, update)
-      window.removeEventListener('storage', update)
-    }
-  }, [])
-
   /* ---------- reading the graphs ---------- */
   const loadToken = useRef(0)
   const refresh = useCallback(async () => {
     const u = userRef.current
     const sc = scopeRef.current
     setNote('')
-    clearGraphCache()
+    clearCaches()
     const mine = ++loadToken.current
     const had = rowsRef.current.length > 0
-    if (sc === 'mine' && !u) {
-      keep.current = true
-      setRows([])
-      setLoaded(true)
-      setFreshness('')
-      setNote('Sign in with the bar at the top right to see your own graphs, or choose “Everything I can see” to see the published ones.')
-      return
-    }
     setRefreshing(true)
+    if (!had) setProgress('Loading graphs from VEGR.AI…')
     try {
-      const got = await loadSummaries(u, sc === 'mine', (n, total) => {
-        if (mine === loadToken.current && !had) setProgress(`Loading graphs from VEGR.AI… ${n}${isFinite(total) ? ' of ' + total : ''}`)
-      })
+      const got = await loadIndex(u, sc)
       if (mine !== loadToken.current) return
       writeCache(sc, u, got)
       setFreshness('read ' + stamp(Date.now()))
       keep.current = true
       setRows(got)
       setLoaded(true)
-      if (!u) setNote('Not signed in: showing published graphs only. Sign in to see everything you can open.')
     } catch (e) {
       if (mine !== loadToken.current) return
+      if ((e as McpError)?.status === 401) return onSignOutRef.current()
       const msg = (e as Error)?.message
       setNote('VEGR.AI could not be reached' + (msg ? ' (' + msg + ')' : '') + '. ' + (had ? 'Showing the copy saved in this browser.' : 'Showing only the largest meta areas from 13 Nov 2026.'))
     } finally {
@@ -269,27 +284,39 @@ export default function App() {
     }
     settle()
     if (!f.tags.length && !ty) return
-    if (shown.length > NODE_LIMIT) {
-      setNote(`These filters leave ${shown.length} graphs. The nodes inside graphs are shown for at most ${NODE_LIMIT} at a time; choose a meta area or a narrower filter. Showing the graphs only.`)
-      return
-    }
+    // One request per chosen meta area (a graph under two of them is fetched twice). With only a
+    // node type chosen: one request for every graph that holds that type, in any meta area.
     setNodeNote('loading nodes…')
-    loadGraphs(
-      userRef.current,
-      shown.map((r) => r.id),
-      (done, total) => mine === renderToken.current && setNodeNote(`loading nodes ${done} of ${total}`),
-      () => mine === renderToken.current,
-    )
-      .then((detail) => {
+    const u = userRef.current
+    const sc = scopeRef.current
+    const asks = f.tags.length ? f.tags : ['']
+    Promise.all(asks.map((tag) => loadNodes(u, sc, tag, ty)))
+      .then((parts) => {
         if (mine !== renderToken.current) return
+        const detail = Object.assign({}, ...parts)
         setNodeNote('')
         engine.build(shown, detail, f.type, f.only, !loaded)
         settle()
+        // Task colours: read each graph with tasks once (kept for the session).
+        for (const id of engine.graphsWithTasks())
+          loadGraph(u, id)
+            .then((g) => {
+              if (mine !== renderToken.current) return
+              const by: Record<string, unknown> = {}
+              for (const n of g.nodes) if (n.metadata && n.metadata.status != null) by[n.id] = n.metadata.status
+              engine.setTaskStatus(id, by)
+            })
+            .catch(() => {})
       })
       .catch((e) => {
         if (mine !== renderToken.current) return
         setNodeNote('')
-        setNote('The nodes inside the graphs could not be loaded (' + ((e as Error)?.message || 'unknown error') + '). Showing the graphs only.')
+        const msg = (e as Error)?.message || 'unknown error'
+        setNote(
+          'The nodes inside the graphs could not be loaded (' + msg + '). ' +
+            (/more than \d+ graphs/.test(msg) ? (f.tags.length ? 'This meta area has' : 'This node type is in') + ' more graphs than the node view can load at once' + (f.tags.length ? '.' : '; choose a meta area as well.') + ' ' : '') +
+            'Showing the graphs only.',
+        )
       })
   }, [engine, rows, loaded, effKey])
 
@@ -351,11 +378,6 @@ export default function App() {
   }
 
   /* ---------- actions on a graph ---------- */
-  function canChange(g: GraphItem) {
-    return !!user?.token && (isSuperadmin(user) || g.createdBy.toLowerCase() === user.email.toLowerCase())
-  }
-  const changeReason = !user ? 'Sign in to rename or delete graphs.' : 'Only the person who created this graph can rename or delete it.'
-
   function askRename(g: GraphItem) {
     setMenu(null)
     setDialog({
@@ -368,12 +390,9 @@ export default function App() {
         if (!v) throw plain('The title cannot be empty.')
         if (v !== g.title) {
           const row = rowsRef.current.find((r) => r.id === g.id)
-          await renameGraph(user!, g.id, v, row?.version ?? null)
+          await renameGraph(user, g.id, v)
           g.title = v
-          if (row) {
-            row.title = v
-            row.version = null // Read again before the next rename.
-          }
+          if (row) row.title = v
           writeCache(scope, user, rowsRef.current)
           bump((n) => n + 1)
         }
@@ -389,7 +408,7 @@ export default function App() {
       ok: 'Delete',
       danger: true,
       run: async () => {
-        await deleteGraph(user!, g.id)
+        await deleteGraph(user, g.id)
         const title = g.title
         if (selected && (selected === g || (selected.kind === 'n' && selected.parent === g))) engine?.select(null)
         const left = rowsRef.current.filter((r) => r.id !== g.id)
@@ -402,7 +421,7 @@ export default function App() {
           ok: 'Undo',
           cancel: 'Close',
           run: async () => {
-            await restoreGraph(user!, g.id)
+            await restoreGraph(user, g.id)
             setDialog(null)
             refresh()
           },
@@ -459,12 +478,17 @@ export default function App() {
       </div>
 
       <div className="authbar">
-        <vegvisr-auth lang="en"></vegvisr-auth>
+        <span className="who" title={user.role || ''}>
+          {user.email}
+        </span>
+        <button className="ghost" type="button" onClick={onSignOut}>
+          Sign out
+        </button>
       </div>
 
 
       {menu && (
-        <ContextMenu graph={menu.g} x={menu.x} y={menu.y} canChange={canChange(menu.g)} reason={changeReason} onRename={() => askRename(menu.g)} onDelete={() => askDelete(menu.g)} />
+        <ContextMenu graph={menu.g} x={menu.x} y={menu.y} onRename={() => askRename(menu.g)} onDelete={() => askDelete(menu.g)} />
       )}
       {dialog && <Dialog spec={dialog} why={why} onClose={() => setDialog(null)} />}
       {tagOpen && (

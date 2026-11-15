@@ -5,16 +5,12 @@ export function ContextMenu({
   graph,
   x,
   y,
-  canChange,
-  reason,
   onRename,
   onDelete,
 }: {
   graph: GraphItem
   x: number
   y: number
-  canChange: boolean
-  reason: string
   onRename: () => void
   onDelete: () => void
 }) {
@@ -30,13 +26,12 @@ export function ContextMenu({
   return (
     <div className="ctx" ref={ref} role="menu" aria-label="Actions for this graph" style={pos}>
       <div className="ctxhead">{graph.title}</div>
-      <button type="button" className="ctxitem" role="menuitem" disabled={!canChange} onClick={onRename}>
+      <button type="button" className="ctxitem" role="menuitem" onClick={onRename}>
         Rename graph…
       </button>
-      <button type="button" className="ctxitem warn" role="menuitem" disabled={!canChange} onClick={onDelete}>
+      <button type="button" className="ctxitem warn" role="menuitem" onClick={onDelete}>
         Delete graph…
       </button>
-      {!canChange && <div className="ctxnote">{reason}</div>}
     </div>
   )
 }
