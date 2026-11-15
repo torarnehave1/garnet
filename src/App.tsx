@@ -8,6 +8,8 @@ import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
 import { Login } from './components/Login'
+import { ImpersonationBar, isImpersonating, returnToOwnLogin } from './components/ImpersonationBar'
+import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
 import { TagPanel } from './components/TagPanel'
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
@@ -116,7 +118,7 @@ export default function App() {
     completeMagicLink(magic)
       .then(setUser)
       .catch((e) => {
-        setError(`This sign-in link did not work (${(e as Error).message}). Ask for a new one below.`)
+        setError(T[readLang()].badLink((e as Error).message))
         const u = new URL(window.location.href)
         u.searchParams.delete('magic')
         window.history.replaceState({}, '', u.toString())
@@ -126,7 +128,7 @@ export default function App() {
   if (checking)
     return (
       <main className="login">
-        <p className="loginLead">Signing you in…</p>
+        <p className="loginLead">{T[readLang()].signingIn}</p>
       </main>
     )
   if (!user) return <Login error={error} />
@@ -134,6 +136,8 @@ export default function App() {
     <Garnet
       user={user}
       onSignOut={() => {
+        // Signing out while logged in as someone else returns to the real login first, then signs that out.
+        returnToOwnLogin()
         clearUser()
         clearCaches()
         setUser(null)
@@ -478,12 +482,19 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       </div>
 
       <div className="authbar">
-        <span className="who" title={user.role || ''}>
-          {user.email}
-        </span>
-        <button className="ghost" type="button" onClick={onSignOut}>
-          Sign out
-        </button>
+        {isImpersonating() ? (
+          <ImpersonationBar user={user} />
+        ) : (
+          <>
+            <ImpersonationBar user={user} />
+            <span className="who" title={user.role || ''}>
+              {user.email}
+            </span>
+            <button className="ghost" type="button" onClick={onSignOut}>
+              Sign out
+            </button>
+          </>
+        )}
       </div>
 
 

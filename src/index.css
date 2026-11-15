@@ -32,6 +32,14 @@ h1 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 3.4vw
 .rateText .n { color: #6fd3c7; }
 
 .authbar { position: absolute; top: 14px; right: 16px; z-index: 6; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 4px 4px 12px; }
+.impersonating { display: flex; align-items: center; gap: 10px; color: #1a1205; background: #e3a008; border-radius: 999px; padding: 4px 4px 4px 12px; font-size: 13px; max-width: 100%; }
+.impersonating span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.impersonating button { min-width: 0; padding: 4px 12px; background: #1a1205; color: #f8d58a; font-size: 12px; }
+.authbar:has(.impersonating) { background: transparent; border: 0; padding: 0; }
+.loginAs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.loginAs input { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; width: 220px; max-width: 50vw; }
+.loginAs button { min-width: 0; padding: 4px 12px; }
+.loginAsErr { color: var(--danger); font-size: 12px; flex-basis: 100%; text-align: right; }
 .authbar .who { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 
 /* ---------- sign-in page ---------- */
@@ -42,6 +50,9 @@ h1 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 3.4vw
   mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%); }
 .loginCard { position: relative; width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px 24px; backdrop-filter: blur(8px); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45); }
 .brand.big h1 { font-size: 34px; }
+.langSwitch { display: flex; justify-content: flex-end; gap: 4px; margin: -12px -8px 8px 0; }
+.langSwitch button { min-width: 0; padding: 3px 10px; font-size: 12px; font-weight: 500; background: transparent; color: var(--muted); border: 1px solid transparent; }
+.langSwitch button.on { color: var(--ink); border-color: var(--line); background: rgba(255, 255, 255, 0.04); }
 .loginLead { color: var(--muted); margin: 16px 0 20px; }
 .login form { display: flex; flex-direction: column; gap: 10px; }
 .login label { font-size: 13px; color: var(--muted); }

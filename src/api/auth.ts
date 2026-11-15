@@ -1,3 +1,4 @@
+import type { Lang } from '../lib/lang'
 import type { User } from '../lib/types'
 
 // Magic-link login, the same flow as the Contacts app:
@@ -51,11 +52,11 @@ function returnUrl() {
   return u.toString()
 }
 
-export async function sendMagicLink(email: string): Promise<void> {
+export async function sendMagicLink(email: string, lang: Lang): Promise<void> {
   const r = await fetch(`${AUTH}/login/magic/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email.trim(), redirectUrl: returnUrl() }),
+    body: JSON.stringify({ email: email.trim(), redirectUrl: returnUrl(), lang }),
   })
   const d = await r.json().catch(() => ({}))
   if (!r.ok || !d.success) throw new Error(d.error || 'The sign-in link could not be sent.')

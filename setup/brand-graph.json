@@ -1,6 +1,6 @@
 {
  "id": "dedeaf23-c319-45a3-8d47-c9134c65ed85",
- "override": false,
+ "override": true,
  "graphData": {
   "metadata": {
    "title": "Merkevare – Garnet",
@@ -38,10 +38,18 @@
       "cssUrl": "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500&display=swap"
      },
      "login": {
-      "lead": "The VEGR.AI knowledge graphs as one growing network. Sign in with your VEGR.AI email.",
-      "button": "Send sign-in link",
-      "sentTitle": "Check your inbox",
-      "footer": "Garnet reads and changes graphs only as you, with your own VEGR.AI access."
+      "en": {
+       "lead": "The VEGR.AI knowledge graphs as one growing network. Sign in with your VEGR.AI email.",
+       "button": "Send sign-in link",
+       "sentTitle": "Check your inbox",
+       "footer": "Garnet reads and changes graphs only as you, with your own VEGR.AI access."
+      },
+      "no": {
+       "lead": "Kunnskapsgrafene i VEGR.AI som ett voksende nettverk. Logg inn med e-postadressen din i VEGR.AI.",
+       "button": "Send innloggingslenke",
+       "sentTitle": "Sjekk innboksen",
+       "footer": "Garnet leser og endrer grafer bare som deg, med din egen tilgang i VEGR.AI."
+      }
      }
     },
     "color": "#0b1220",
@@ -57,7 +65,7 @@
     "bibl": [],
     "position": {},
     "visible": true,
-    "info": "## Garnet – merkevaren\n\nDenne grafen er kilden til hvordan Garnet ser ut på garnet.vegr.ai. Innloggingssiden leser noden **Garnet brand** (type world-brand) før noen er logget inn, derfor er grafen publisert.\n\n- **Logo:** nettmerket fra Garnet-appen, i albumet Assets.\n- **Farger:** natt-vann, med rav (#f2b45a) som aksent.\n- **Fonter:** Fraunces for titler, IBM Plex Sans for tekst.\n- **Innloggingstekst:** feltet `login` i metadata.\n\nE-posten med innloggingslenken ligger i grafen tagget #EMAIL-garnet.vegr.ai.\n\nEier: post@vegr.ai."
+    "info": "## Garnet – merkevaren\n\nDenne grafen er kilden til hvordan Garnet ser ut på garnet.vegr.ai. Innloggingssiden leser noden **Garnet brand** (type world-brand) før noen er logget inn, derfor er grafen publisert.\n\n- **Logo:** nettmerket fra Garnet-appen, i albumet Assets.\n- **Farger:** natt-vann, med rav (#f2b45a) som aksent.\n- **Fonter:** Fraunces for titler, IBM Plex Sans for tekst.\n- **Innloggingstekst:** feltet `login` i metadata, med `no` og `en`. Språkvalget på innloggingssiden velger også språket i innloggingsmailen.\n\nE-posten med innloggingslenken ligger i grafen tagget #EMAIL-garnet.vegr.ai.\n\nEier: post@vegr.ai."
    }
   ],
   "edges": []

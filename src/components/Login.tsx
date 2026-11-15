@@ -1,18 +1,29 @@
 import { useEffect, useState } from 'react'
 import { sendMagicLink } from '../api/auth'
 import { DEFAULT_BRAND, loadBrand, type Brand as BrandData } from '../api/brand'
+import { readLang, saveLang, T, type Lang } from '../lib/lang'
 import { Brand } from './Brand'
 
 // Garnet's own sign-in page: one email field, a magic link by email. Same flow as Contacts.
+// Norsk / English: the choice sets the page text and the language of the sign-in email.
 export function Login({ error }: { error?: string }) {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(error || '')
   const [b, setB] = useState<BrandData>(DEFAULT_BRAND)
+  const [lang, setLang] = useState<Lang>(readLang)
   useEffect(() => {
     loadBrand().then(setB)
   }, [])
+  const t = T[lang]
+  const l = b.login[lang]
+
+  function choose(next: Lang) {
+    setLang(next)
+    saveLang(next)
+    document.documentElement.lang = next === 'no' ? 'nb' : 'en'
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -20,7 +31,7 @@ export function Login({ error }: { error?: string }) {
     setBusy(true)
     setErr('')
     try {
-      await sendMagicLink(email)
+      await sendMagicLink(email, lang)
       setSent(true)
     } catch (x) {
       setErr((x as Error).message)
@@ -33,16 +44,22 @@ export function Login({ error }: { error?: string }) {
     <main className="login">
       <div className="loginNet" aria-hidden="true" />
       <section className="loginCard" aria-labelledby="loginTitle">
+        <div className="langSwitch" role="group" aria-label="Language / Språk">
+          <button type="button" className={lang === 'no' ? 'on' : ''} aria-pressed={lang === 'no'} onClick={() => choose('no')}>
+            Norsk
+          </button>
+          <button type="button" className={lang === 'en' ? 'on' : ''} aria-pressed={lang === 'en'} onClick={() => choose('en')}>
+            English
+          </button>
+        </div>
         <Brand big name={b.name} slogan={b.slogan} logoUrl={b.logoUrl} />
         <p className="loginLead" id="loginTitle">
-          {b.login.lead}
+          {l.lead}
         </p>
         {sent ? (
           <div className="loginSent" role="status">
-            <h2>{b.login.sentTitle}</h2>
-            <p>
-              A sign-in link is on its way to <b>{email}</b>. Open it on this device to come back here signed in.
-            </p>
+            <h2>{l.sentTitle}</h2>
+            <p>{t.sentBody(email)}</p>
             <button
               className="ghost"
               type="button"
@@ -51,12 +68,12 @@ export function Login({ error }: { error?: string }) {
                 setEmail('')
               }}
             >
-              Use another email
+              {t.another}
             </button>
           </div>
         ) : (
           <form onSubmit={submit}>
-            <label htmlFor="loginEmail">Email address</label>
+            <label htmlFor="loginEmail">{t.email}</label>
             <input
               id="loginEmail"
               type="email"
@@ -73,11 +90,11 @@ export function Login({ error }: { error?: string }) {
               </p>
             )}
             <button type="submit" disabled={busy || !email.trim()} style={{ background: b.accent }}>
-              {busy ? 'Sending link…' : b.login.button}
+              {busy ? t.sending : l.button}
             </button>
           </form>
         )}
-        <p className="loginFoot">{b.login.footer}</p>
+        <p className="loginFoot">{l.footer}</p>
       </section>
     </main>
   )
