@@ -10,6 +10,8 @@ export interface Row {
   updated: string
   world: string
   types: string[]
+  // The graph's card image (its first portfolio-image node), or ''.
+  image: string
   createdBy: string
   version: number | null
 }

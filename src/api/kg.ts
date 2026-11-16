@@ -15,6 +15,7 @@ interface IndexRow {
   updatedAt?: string
   world?: string | null
   nodeTypes?: string[]
+  image?: string | null
   publishedDomains?: string[]
   nodes?: { id: string; label?: string; type?: string }[]
   edges?: { source: string; target: string }[]
@@ -36,6 +37,7 @@ function toRow(g: IndexRow): Row {
     updated: g.updatedAt || '',
     world: g.world || '',
     types: g.nodeTypes || [],
+    image: g.image || '',
     createdBy: '',
     version: null,
   }

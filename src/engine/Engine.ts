@@ -37,6 +37,8 @@ export interface GraphItem extends Base {
   color: string
   sem: GraphItem[]
   flowRows: number
+  // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
+  image: string
   createdBy: string
   version: number | null
 }
@@ -54,6 +56,10 @@ export interface NodeItem extends Base {
   status: StatusKind
 }
 export type Item = Hub | GraphItem | NodeItem
+
+// What makes a graph a course, and the size its card image is kept at (one square bitmap per course).
+const COURSE_TYPE = 'kurs-steg'
+const PIC = 256
 
 type Link<S extends Item = Item, T extends Item = Item> = SimulationLinkDatum<Item> & { source: S; target: T }
 interface SemLink extends Link<GraphItem, GraphItem> {
@@ -155,6 +161,8 @@ export class Engine {
   private pressT = 0
   private pressAt: { clientX: number; clientY: number } | null = null
   private cleanup: (() => void)[] = []
+  // Course images by address: null while loading or when the address gave no picture.
+  private pics = new Map<string, HTMLCanvasElement | null>()
 
   constructor(cv: HTMLCanvasElement, ev: EngineEvents) {
     this.cv = cv
@@ -221,6 +229,7 @@ export class Engine {
       order: i,
       t,
       r: Math.min(6, 1.8 + Math.sqrt(g.n) * 0.35),
+      image: (g.types || []).includes(COURSE_TYPE) ? g.image || '' : '',
       color: g.tags.length ? colorOf(g.tags[0]) : LOOSE,
       sem: [],
       flowRows: 0,
@@ -339,7 +348,7 @@ export class Engine {
         const d = detail[g.id]
         if (!d) return
         const by = new Map<string, NodeItem>()
-        g.r = 5.5
+        g.r = g.image ? 9 : 5.5
         const nodesIn = only && type !== '*' ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
         nodesIn.forEach((n, i) => {
           const a = i * 2.39996
@@ -731,6 +740,28 @@ export class Engine {
   private fs(base: number) {
     return Math.min(base * 2.4, base * Math.max(1, Math.pow(this.T.k / this.zoom0, 0.45))) / this.T.k
   }
+  // A course image, cut to a centred square and kept small. Fetched the first time the course is
+  // at least 12 px wide on screen, once per address; until then, and if it fails, the square
+  // stays in the graph's colour. Garnet never reads pixels back, so no CORS request is needed.
+  private pic(url: string, px: number): HTMLCanvasElement | null {
+    const got = this.pics.get(url)
+    if (got !== undefined) return got
+    if (px < 12) return null
+    this.pics.set(url, null)
+    const img = new Image()
+    img.decoding = 'async'
+    img.referrerPolicy = 'no-referrer'
+    img.onload = () => {
+      const side = Math.min(img.naturalWidth, img.naturalHeight)
+      if (!side) return
+      const c = document.createElement('canvas')
+      c.width = c.height = PIC
+      c.getContext('2d')!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, PIC, PIC)
+      this.pics.set(url, c)
+    }
+    img.src = url
+    return null
+  }
   private isNear(d: Item) {
     return !this.selected || d === this.selected || (this.near !== null && this.near.has(d))
   }
@@ -832,8 +863,19 @@ export class Engine {
       const fresh = this.playing && age < 14
       ctx.globalAlpha = this.isNear(d) ? 0.95 : 0.12
       ctx.fillStyle = fresh ? '#ffffff' : d.color
+      const r = d.r + (fresh ? (14 - age) * 0.35 : 0)
+      if (d.image) {
+        // A course: a square in the graph's colour, its card image inside once it has loaded.
+        ctx.fillRect(d.x - r, d.y - r, r * 2, r * 2)
+        const pic = this.pic(d.image, r * 2 * T.k)
+        if (pic) {
+          const edge = r * 0.08
+          ctx.drawImage(pic, d.x - r + edge, d.y - r + edge, (r - edge) * 2, (r - edge) * 2)
+        }
+        continue
+      }
       ctx.beginPath()
-      ctx.arc(d.x, d.y, d.r + (fresh ? (14 - age) * 0.35 : 0), 0, 6.2832)
+      ctx.arc(d.x, d.y, r, 0, 6.2832)
       ctx.fill()
     }
     this.hubs.forEach((d, i) => {
