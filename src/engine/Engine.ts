@@ -2,7 +2,7 @@ import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY
 import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
-import { flowOrder, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
+import { courseOrder, flowOrder, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import type { KgGraph, Row } from '../lib/types'
 import { SEED } from './seed'
@@ -363,18 +363,28 @@ export class Engine {
           by.set(n.id, o)
           this.inner.push(o)
         })
-        // Flow steps, or else tasks, stand in a column beside the graph.
+        // Flow steps, or else course steps, or else tasks, stand in a column beside the graph.
         let row = 0
         let stepNo = 0
         let head: NodeItem | null = null
         let column = flowOrder(d.nodes, d.edges)
+        // Course steps are not tied to each other in the graph (a step's summary and transcript
+        // stand between them), so the column's own order ties them: each to the one before it.
+        let course = false
+        if (!column.length) {
+          column = courseOrder(d.nodes, d.edges)
+          course = column.length > 0
+        }
         if (!column.length) column = taskOrder(d.nodes, d.edges)
+        let before: NodeItem | null = null
         column.forEach((id) => {
           const o = by.get(id)
           if (!o) return
           o.flow = { row: row++, num: o.type === 'flow-step' ? ++stepNo : 0 }
           o.r = 2.2
           if (!head) head = o
+          if (course && before) this.flowLinks.push({ source: before, target: o })
+          before = o
         })
         g.flowRows = row
         if (head) this.flowLinks.push({ source: g, target: head, stem: true })
@@ -386,8 +396,10 @@ export class Engine {
           const a = by.get(e.source)
           const b = by.get(e.target)
           if (a && b && a !== b) {
-            if (a.flow && b.flow) this.flowLinks.push({ source: a, target: b })
-            else this.innerLinks.push({ source: a, target: b })
+            // In a course column the line between two steps is already drawn from the order.
+            if (a.flow && b.flow) {
+              if (!course) this.flowLinks.push({ source: a, target: b })
+            } else this.innerLinks.push({ source: a, target: b })
             a.links.push(b)
             b.links.push(a)
           }

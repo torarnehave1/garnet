@@ -47,6 +47,46 @@ export function flowOrder(ns: KgNode[], es: KgEdge[]): string[] {
   return seq
 }
 
+// A course graph (nodes of type kurs-steg): its steps in the order of the course, read from the
+// edges. The steps are not tied to each other directly — a step's summary and transcript stand
+// between them — so the walk passes through every node and keeps only the steps. It starts at the
+// course description (type kursbeskrivelse), which then stands first, or else at the nodes nothing
+// points to. [] when the graph has fewer than two steps.
+export function courseOrder(ns: KgNode[], es: KgEdge[]): string[] {
+  const steps = ns.filter((n) => n.type === 'kurs-steg')
+  if (steps.length < 2) return []
+  const typ: Record<string, string> = {}
+  const out: Record<string, string[]> = {}
+  const inc: Record<string, number> = {}
+  ns.forEach((n) => {
+    typ[n.id] = n.type || ''
+    out[n.id] = []
+    inc[n.id] = 0
+  })
+  es.forEach((e) => {
+    if (out[e.source] && out[e.target] && e.source !== e.target) {
+      out[e.source].push(e.target)
+      inc[e.target]++
+    }
+  })
+  let stack = ns.filter((n) => n.type === 'kursbeskrivelse').map((n) => n.id)
+  if (!stack.length) stack = ns.filter((n) => !inc[n.id]).map((n) => n.id)
+  stack.reverse()
+  const seen = new Set<string>()
+  const seq: string[] = []
+  while (stack.length) {
+    const id = stack.pop()!
+    if (seen.has(id)) continue
+    seen.add(id)
+    if (typ[id] === 'kursbeskrivelse' || typ[id] === 'kurs-steg') seq.push(id)
+    for (let j = out[id].length - 1; j >= 0; j--) if (!seen.has(out[id][j])) stack.push(out[id][j])
+  }
+  steps.forEach((n) => {
+    if (!seen.has(n.id)) seq.push(n.id)
+  })
+  return seq
+}
+
 // A graph with tasks (type oppgave) and no flow: the tasks stand in the same kind of column.
 // No order between tasks, no numbers. The node that points to most tasks stands first.
 export function taskOrder(ns: KgNode[], es: KgEdge[]): string[] {
