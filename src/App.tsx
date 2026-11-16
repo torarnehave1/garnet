@@ -331,6 +331,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   function changeFilters(p: Partial<Filters>) {
     engine?.pause()
     const next = { ...filters, ...p }
+    // Choosing a node type shows only nodes of that type inside each graph; the box can still be unticked.
+    if (p.type && p.type !== '*' && p.type !== filters.type && p.only === undefined) next.only = true
     keep.current = false
     focusWant.current = null
     storeView({ f: next, focus: null })

@@ -116,7 +116,7 @@ export function shownRows(rows: Row[], f: Filters): Row[] {
   })
 }
 
-export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: false, pub: '*', year: '*', since: '*', world: '*' }
+export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: true, pub: '*', year: '*', since: '*', world: '*' }
 
 export function monthOf(t: number) {
   return new Date(t).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
