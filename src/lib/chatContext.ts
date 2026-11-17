@@ -76,7 +76,7 @@ export function viewLine(v: ViewState): string {
     f.pub !== '*' ? `published ${f.pub}` : '',
     f.year !== '*' ? `created ${f.year}` : '',
     f.since !== '*' ? `from ${f.since}` : '',
-    `${words(v).count} graphs`,
+    `${words(v).count} graph${words(v).count === 1 ? '' : 's'}`,
     clicked ? `clicked: ${clicked}` : '',
   ]
     .filter(Boolean)
