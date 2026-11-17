@@ -22,6 +22,7 @@ interface IndexRow {
 }
 interface IndexAnswer {
   total?: number
+  worlds?: string[]
   graphs: IndexRow[]
 }
 
@@ -44,9 +45,17 @@ function toRow(g: IndexRow): Row {
 }
 
 // All graphs in one request: "mine", or everything the person can see across all Worlds.
-export async function loadIndex(user: User, scope: Scope): Promise<Row[]> {
+// Also every World the person can use, the empty ones too (graph_index `worlds`, dev-worker 98c030b).
+export async function loadIndex(user: User, scope: Scope): Promise<{ rows: Row[]; worlds: string[] }> {
   const a = await mcpCall<IndexAnswer>(user, 'graph_index', { scope })
-  return (a.graphs || []).filter((g) => g && g.graphId).map(toRow)
+  return { rows: (a.graphs || []).filter((g) => g && g.graphId).map(toRow), worlds: Array.isArray(a.worlds) ? a.worlds.map(String) : [] }
+}
+
+// Move a graph into a World's own storage (Superadmin only; the server checks). Id and links stay.
+export async function moveGraphToWorld(user: User, id: string, world: string): Promise<string> {
+  const a = await mcpCall<{ world?: string }>(user, 'move_graph_to_world', { graphId: id, world })
+  clearCaches()
+  return a.world || world
 }
 
 // Nodes (id, label, type) and edges of every graph under one meta area or holding one node type,

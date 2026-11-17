@@ -4,6 +4,8 @@ export interface DialogSpec {
   title: string
   text: string
   input?: string
+  // A choice instead of a text field: the value of the chosen option is passed to run.
+  choices?: { value: string; label: string }[]
   ok?: string
   cancel?: string
   danger?: boolean
@@ -12,14 +14,14 @@ export interface DialogSpec {
 
 // Garnet changes nothing by itself: each action names the graph, says what will happen and waits for a yes.
 export function Dialog({ spec, onClose, why }: { spec: DialogSpec; onClose: () => void; why: (e: unknown) => string }) {
-  const [value, setValue] = useState(spec.input ?? '')
+  const [value, setValue] = useState(spec.input ?? spec.choices?.[0]?.value ?? '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    setValue(spec.input ?? '')
+    setValue(spec.input ?? spec.choices?.[0]?.value ?? '')
     setErr('')
     setBusy(false)
     if (spec.input != null) {
@@ -61,6 +63,15 @@ export function Dialog({ spec, onClose, why }: { spec: DialogSpec; onClose: () =
               }
             }}
           />
+        )}
+        {spec.choices && (
+          <select className="dlgInput" aria-label="Choose" value={value} disabled={busy} onChange={(e) => setValue(e.target.value)}>
+            {spec.choices.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
         )}
         {err && (
           <p className="dlgerr" role="alert">

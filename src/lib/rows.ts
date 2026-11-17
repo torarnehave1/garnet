@@ -57,9 +57,11 @@ export function worldRows(rows: Row[], world: string): Row[] {
   return world === '*' ? rows : rows.filter((r) => (r.world || '') === world)
 }
 
-export function worldOptions(rows: Row[]): Option[] {
+// Every World the person can use is listed, also one with no graphs yet (count 0).
+export function worldOptions(rows: Row[], worlds: string[] = []): Option[] {
   const count = new Map<string, number>()
   rows.forEach((r) => count.set(r.world || '', (count.get(r.world || '') || 0) + 1))
+  worlds.forEach((w) => w && !count.has(w) && count.set(w, 0))
   const names = Array.from(count.keys()).sort()
   const out: Option[] = [{ value: '*', label: `All (${rows.length})` }]
   if (names.length > 1) names.forEach((w) => out.push({ value: w, label: `${w || SHARED} (${count.get(w)})` }))

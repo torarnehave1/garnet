@@ -7,12 +7,14 @@ export function ContextMenu({
   y,
   onRename,
   onDelete,
+  onMove,
 }: {
   graph: GraphItem
   x: number
   y: number
   onRename: () => void
   onDelete: () => void
+  onMove?: () => void // only when the person may move graphs and there is a World to move to
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: x, top: y })
@@ -29,6 +31,11 @@ export function ContextMenu({
       <button type="button" className="ctxitem" role="menuitem" onClick={onRename}>
         Rename graph…
       </button>
+      {onMove && (
+        <button type="button" className="ctxitem" role="menuitem" onClick={onMove}>
+          Move to World…
+        </button>
+      )}
       <button type="button" className="ctxitem warn" role="menuitem" onClick={onDelete}>
         Delete graph…
       </button>

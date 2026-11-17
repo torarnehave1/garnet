@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { clearUser, completeMagicLink, magicInUrl, readUser } from './api/auth'
-import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, renameGraph, restoreGraph } from './api/kg'
+import { clearUser, completeMagicLink, isSuperadmin, magicInUrl, readUser } from './api/auth'
+import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, moveGraphToWorld, renameGraph, restoreGraph } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { BulkTag } from './components/BulkTag'
@@ -20,6 +20,7 @@ import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './
 import {
   DEFAULT_FILTERS,
   monthOf,
+  SHARED,
   parseTags,
   shownRows,
   sinceOptions,
@@ -68,6 +69,25 @@ function readCache(scope: Scope, user: User | null): { at: number; rows: Row[] }
     return null
   }
 }
+// The Worlds the person can use, empty ones too, kept beside the rows.
+function worldsKey(user: User | null) {
+  return `garnet-worlds-v1-${user?.email || 'anon'}`
+}
+function readWorlds(user: User | null): string[] {
+  try {
+    const w = JSON.parse(localStorage.getItem(worldsKey(user)) || '[]')
+    return Array.isArray(w) ? w.map(String) : []
+  } catch {
+    return []
+  }
+}
+function writeWorlds(user: User | null, worlds: string[]) {
+  try {
+    localStorage.setItem(worldsKey(user), JSON.stringify(worlds))
+  } catch {
+    /* storage blocked */
+  }
+}
 function writeCache(scope: Scope, user: User | null, rows: Row[]) {
   try {
     localStorage.setItem(rowsKey(scope, user), JSON.stringify({ at: Date.now(), rows }))
@@ -78,10 +98,10 @@ function writeCache(scope: Scope, user: User | null, rows: Row[]) {
 
 // Filters that name something no longer in the list fall back to "any". The stored choice is
 // kept, so it comes back when the graphs that carry it come back.
-function reconcile(f: Filters, rows: Row[]): Filters {
+function reconcile(f: Filters, rows: Row[], worlds: string[]): Filters {
   if (!rows.length) return f
   const out = { ...f }
-  if (out.world !== '*' && (worldOptions(rows).length < 2 || !rows.some((r) => (r.world || '') === out.world))) out.world = '*'
+  if (out.world !== '*' && !worldOptions(rows, worlds).some((o) => o.value === out.world && o.value !== '*')) out.world = '*'
   const wr = worldRows(rows, out.world)
   const tags = new Set(wr.flatMap((r) => r.tags))
   out.tags = out.tags.filter((t) => tags.has(t))
@@ -192,7 +212,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       ? { graph: flowGraph, step: selected?.kind === 'n' ? selected.nid : null }
       : null
 
-  const eff = useMemo(() => reconcile(filters, rows), [filters, rows])
+  const [worlds, setWorlds] = useState<string[]>(() => readWorlds(user))
+  const eff = useMemo(() => reconcile(filters, rows, worlds), [filters, rows, worlds])
   const effRef = useRef(eff)
   effRef.current = eff
   const rowsRef = useRef(rows)
@@ -243,9 +264,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     setRefreshing(true)
     if (!had) setProgress('Loading graphs from VEGR.AI…')
     try {
-      const got = await loadIndex(u, sc)
+      const { rows: got, worlds: ws } = await loadIndex(u, sc)
       if (mine !== loadToken.current) return
       writeCache(sc, u, got)
+      writeWorlds(u, ws)
+      setWorlds(ws)
       setFreshness('read ' + stamp(Date.now()))
       keep.current = true
       setRows(got)
@@ -421,6 +444,28 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       },
     })
   }
+  // A graph moves into another World's own storage, from the shared storage or from the World it is in.
+  // Id and links stay; the original goes to the trash of the store it came from for 30 days.
+  function askMove(g: GraphItem) {
+    setMenu(null)
+    const here = g.world || SHARED
+    setDialog({
+      title: 'Move to World',
+      text: `Move “${g.title}” from ${here} into the World’s own storage below? Its id, links and version history stay; the copy in ${here} goes to the trash there for 30 days.`,
+      choices: worlds.filter((w) => w !== g.world).map((w) => ({ value: w, label: w })),
+      ok: 'Move',
+      run: async (to) => {
+        if (!to) throw plain('Choose a World.')
+        const world = await moveGraphToWorld(user, g.id, to)
+        const next = rowsRef.current.map((r) => (r.id === g.id ? { ...r, world } : r))
+        writeCache(scope, user, next)
+        keep.current = true
+        setRows(next)
+        setDialog(null)
+        setNote(`“${g.title}” is now in ${world}.`)
+      },
+    })
+  }
   function askDelete(g: GraphItem) {
     setMenu(null)
     setDialog({
@@ -516,7 +561,14 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
 
 
       {menu && (
-        <ContextMenu graph={menu.g} x={menu.x} y={menu.y} onRename={() => askRename(menu.g)} onDelete={() => askDelete(menu.g)} />
+        <ContextMenu
+          graph={menu.g}
+          x={menu.x}
+          y={menu.y}
+          onRename={() => askRename(menu.g)}
+          onDelete={() => askDelete(menu.g)}
+          onMove={isSuperadmin(user) && worlds.some((w) => w !== menu.g.world) ? () => askMove(menu.g) : undefined}
+        />
       )}
       {dialog && <Dialog spec={dialog} why={why} onClose={() => setDialog(null)} />}
       {bulkOpen && (
@@ -600,7 +652,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             setFrom(v)
             engine?.setK(fromK(v))
           }}
-          worldOptions={worldOptions(rows)}
+          worldOptions={worldOptions(rows, worlds)}
           yearOptions={yearOptions(wr)}
           sinceOptions={sinceOptions(wr)}
           typeOptions={typeOptions}
