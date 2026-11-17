@@ -208,6 +208,8 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .cmsg.user .cview { text-align: right; }
 .cmsg.user .cview pre { text-align: left; }
 .cviewgo { font-size: 11px; padding: 1px 8px; margin-top: 4px; }
+.cgraphs { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 6px; }
+.cgraphs .ghost { font-size: 12px; padding: 2px 10px; text-align: left; }
 .cmsg.user .cviewgo { display: block; margin-left: auto; }
 .cctx { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cpara { margin: 0 0 8px; }

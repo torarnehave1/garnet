@@ -13,7 +13,7 @@ export interface ChatTurn {
 export type ChatEvent =
   | { type: 'text'; content: string }
   | { type: 'model'; model: string }
-  | { type: 'tool_call'; callId: string; tool: string; name: string }
+  | { type: 'tool_call'; callId: string; tool: string; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; callId: string; ok: boolean; summary: string }
   | { type: 'error'; error: string }
   | { type: 'done' }
@@ -94,7 +94,15 @@ export async function sendChat(
         // mcp_call names the MCP tool it runs; without one it lists the tools.
         const name =
           d.tool === 'mcp_call' ? String(input.tool_name || input.describe_tool || 'list tools') : String(d.tool)
-        onEvent({ type: 'tool_call', callId: String(d.callId), tool: String(d.tool), name })
+        // For mcp_call, the MCP tool's own arguments (where a graphId shows which graph it touches).
+        const args = (d.tool === 'mcp_call' ? input.arguments : input) as Record<string, unknown> | undefined
+        onEvent({
+          type: 'tool_call',
+          callId: String(d.callId),
+          tool: String(d.tool),
+          name,
+          args: args && typeof args === 'object' ? args : {},
+        })
       } else if (name === 'tool_result')
         onEvent({
           type: 'tool_result',

@@ -46,6 +46,25 @@ interface Msg {
   error?: string
   files?: Attachment[] // what went with a question (not kept in the saved history)
   ctx?: ViewNote // what the map showed when the question was asked (kept in the history)
+  graphs?: string[] // graphs this answer created or changed: each gets Show on the map
+}
+
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi
+const isWrite = (name: string) =>
+  !/(^|_)(list|get|search|read|query|preview|describe)/.test(name) && name !== 'list tools'
+
+// The graphs an answer worked on: graph ids in its write calls' arguments, then graph links in
+// its text (a new graph's id is often only in the "View" link the answer gives). At most three.
+function touchedGraphs(writeArgs: Record<string, unknown>[], answer: string): string[] {
+  const ids: string[] = []
+  for (const a of writeArgs)
+    for (const k of ['graphId', 'graph_id', 'id']) {
+      const v = a[k]
+      if (typeof v === 'string' && new RegExp(`^${UUID.source}$`, 'i').test(v)) ids.push(v.toLowerCase())
+    }
+  for (const m of answer.matchAll(/graphId=([0-9a-f-]{36})/gi)) ids.push(m[1].toLowerCase())
+  if (!ids.length) for (const m of answer.matchAll(UUID)) ids.push(m[0].toLowerCase())
+  return [...new Set(ids)].slice(0, 3)
 }
 
 const MODEL_KEY = 'garnet-chat-model-v1'
@@ -66,6 +85,8 @@ export function ChatPanel({
   onClose,
   onWrote,
   onRestore,
+  graphTitle,
+  onShowGraph,
   shownCount,
 }: {
   user: User
@@ -75,6 +96,8 @@ export function ChatPanel({
   onClose: () => void
   onWrote: () => void
   onRestore: (st: NonNullable<ViewNote['state']>) => void // set the map back to a question's view
+  graphTitle: (id: string) => string | null // a graph's title when the map has it
+  onShowGraph: (id: string) => boolean // show and select a graph on the map; false when it is not there
   shownCount: number
 }) {
   const context = `Sees the ${shownCount} graphs on the map` + (graph ? ` · selected: ${graph.title}` : '')
@@ -136,7 +159,7 @@ export function ChatPanel({
     setHistErr('')
     try {
       const saved = await loadMessages(user, s.id)
-      setMsgs(saved.map((m) => ({ role: m.role, text: m.content, model: m.model, ctx: m.context })))
+      setMsgs(saved.map((m) => ({ role: m.role, text: m.content, model: m.model, ctx: m.context, graphs: m.graphs })))
       sessionId.current = s.id
       setOpenId(s.id)
       setSessions(null)
@@ -157,7 +180,7 @@ export function ChatPanel({
   }
 
   // The question and its answer go to the chat history; the first one opens the session.
-  async function keep(question: string, answer: string, ran: string, ctx: ViewNote) {
+  async function keep(question: string, answer: string, ran: string, ctx: ViewNote, graphs?: string[]) {
     try {
       const title = question.replace(/\s+/g, ' ').slice(0, 60)
       // Saves run one after another, so a quick second question cannot open a second session.
@@ -173,7 +196,7 @@ export function ChatPanel({
           graph?.id || null,
         )
       await addMessage(user, sessionId.current, { role: 'user', content: question, context: ctx })
-      await addMessage(user, sessionId.current, { role: 'assistant', content: answer, model: ran })
+      await addMessage(user, sessionId.current, { role: 'assistant', content: answer, model: ran, graphs })
     } catch (err) {
       setHistErr('Not saved to history: ' + (err instanceof Error ? err.message : String(err)))
     }
@@ -273,6 +296,7 @@ export function ChatPanel({
     let answer = ''
     let lastNote = ''
     let ran = model
+    const writeArgs: Record<string, unknown>[] = []
     try {
       await sendChat(
         user,
@@ -296,7 +320,10 @@ export function ChatPanel({
           } else if (e.type === 'tool_call') {
             if (answer.trim()) lastNote = answer.trim()
             answer = ''
-            if (!/(^|_)(list|get|search|read|query|preview)/.test(e.name) && e.name !== 'list tools') wrote = true
+            if (isWrite(e.name)) {
+              wrote = true
+              writeArgs.push(e.args)
+            }
             patchLast((m) => ({
               ...m,
               text: '',
@@ -347,7 +374,10 @@ export function ChatPanel({
       }
       // The saved question names its files (an image by its address); the file content is not kept.
       const asked = [text, files.length ? describe(files) : ''].filter(Boolean).join('\n\n')
-      if (answer.trim() && !ctl.signal.aborted) saving.current = keep(asked, answer.trim(), ran, ctx)
+      const graphs = wrote ? touchedGraphs(writeArgs, answer) : []
+      if (graphs.length) patchLast((m) => ({ ...m, graphs }))
+      if (answer.trim() && !ctl.signal.aborted)
+        saving.current = keep(asked, answer.trim(), ran, ctx, graphs.length ? graphs : undefined)
       // A tool that may have changed something: the map reads the graphs again.
       if (wrote) onWrote()
     }
@@ -452,6 +482,7 @@ export function ChatPanel({
               <div className="muted">Working…</div>
             )}
             {m.error && <div className="cerr">{m.error}</div>}
+            {m.graphs && m.graphs.length > 0 && <GraphButtons ids={m.graphs} title={graphTitle} show={onShowGraph} />}
           </div>
         ))}
       </div>
@@ -608,5 +639,37 @@ function Chips({
       ))}
       {uploading > 0 && <li className="muted">Uploading {uploading}…</li>}
     </ul>
+  )
+}
+
+// Show on the map, for each graph an answer created or changed.
+function GraphButtons({
+  ids,
+  title,
+  show,
+}: {
+  ids: string[]
+  title: (id: string) => string | null
+  show: (id: string) => boolean
+}) {
+  const [missing, setMissing] = useState('')
+  return (
+    <div className="cgraphs">
+      {ids.map((id) => {
+        const t = title(id)
+        return (
+          <button
+            key={id}
+            type="button"
+            className="ghost"
+            title={t ? `Show “${t}” on the map and select it` : `Show graph ${id} on the map`}
+            onClick={() => setMissing(show(id) ? '' : id)}
+          >
+            Show {t ? `“${t.length > 40 ? t.slice(0, 39) + '…' : t}”` : 'the graph'} on the map
+          </button>
+        )
+      })}
+      {missing && <div className="muted">Not on the map yet: refresh, then try again.</div>}
+    </div>
   )
 }

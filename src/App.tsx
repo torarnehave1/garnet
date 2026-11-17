@@ -53,6 +53,10 @@ function placeRestore(engine: Engine, want: { current: MapState | null }, shown:
         ? engine.inner.find((o) => o.nid === s.nid && o.parent.id === s.graph)
         : engine.hubs.find((h) => h.tag === s.tag)
   if (item || last) engine.select(item || null)
+  if (item && r.zoom) {
+    if (!r.until) engine.setK(Infinity) // the whole time line, so a new graph is drawn
+    engine.restoreFocus({ id: item.kind === 'n' ? item.parent.id : item.kind === 'g' ? item.id : '', fx: 0.6, fy: 0.45, z: 2.5 }, () => {})
+  }
   if (last) want.current = null
 }
 
@@ -412,6 +416,23 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     if (same && engine) placeRestore(engine, restoreWant, shownRows(rows, eff), true)
   }
 
+  // Show on the map, for a graph a chat answer made or changed: kept in view if it is already
+  // there, otherwise the filters widen to its World. Then it is selected and the map moves to it.
+  function showGraph(id: string): boolean {
+    const row = rows.find((r) => r.id === id)
+    if (!row || !engine) return false
+    const { find: _find, ...current } = eff
+    void _find
+    const visible = shownRows(rows, eff).some((r) => r.id === id)
+    restoreView({
+      scope,
+      filters: visible ? current : { ...current, ...DEFAULT_FILTERS, world: row.world, only: current.only },
+      sel: { kind: 'g', id },
+      zoom: true,
+    })
+    return true
+  }
+
   /* ---------- filters changed by hand ---------- */
   function changeFilters(p: Partial<Filters>) {
     engine?.pause()
@@ -651,6 +672,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             return { text: viewContext(v), line: viewLine(v), state: mapState(v) }
           }}
           onRestore={restoreView}
+          graphTitle={(id) => rows.find((r) => r.id === id)?.title || null}
+          onShowGraph={showGraph}
           shownCount={snap.kk}
           onClose={() => setChat('closed')}
           onWrote={() => refresh()}

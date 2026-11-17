@@ -24,6 +24,7 @@ export interface SavedMessage {
   content: string
   model?: string
   context?: ViewNote
+  graphs?: string[] // graphs an answer created or changed (Show on the map)
 }
 
 async function call<T>(user: User, path: string, init: RequestInit = {}): Promise<T> {
@@ -68,14 +69,18 @@ export async function addMessage(user: User, sessionId: string, m: SavedMessage)
       role: m.role,
       content: m.content,
       // selection_meta holds Garnet's notes on a message: the model that answered, the map's view.
-      selectionMeta: m.model || m.context ? { model: m.model, context: m.context } : null,
+      selectionMeta: m.model || m.context || m.graphs ? { model: m.model, context: m.context, graphs: m.graphs } : null,
     }),
   })
 }
 
 export async function loadMessages(user: User, sessionId: string): Promise<SavedMessage[]> {
   const j = await call<{
-    messages?: { role: string; content?: string; selectionMeta?: { model?: string; context?: ViewNote } | null }[]
+    messages?: {
+      role: string
+      content?: string
+      selectionMeta?: { model?: string; context?: ViewNote; graphs?: string[] } | null
+    }[]
   }>(user, `/messages?sessionId=${encodeURIComponent(sessionId)}&decrypt=1&limit=200`)
   // Newest first from the store; the chat reads oldest first.
   return (j.messages || [])
@@ -87,6 +92,7 @@ export async function loadMessages(user: User, sessionId: string): Promise<Saved
       content: m.content || '',
       model: m.selectionMeta?.model,
       context: m.selectionMeta?.context?.line ? m.selectionMeta.context : undefined,
+      graphs: Array.isArray(m.selectionMeta?.graphs) ? m.selectionMeta.graphs : undefined,
     }))
 }
 

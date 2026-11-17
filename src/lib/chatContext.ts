@@ -63,6 +63,7 @@ export interface MapState {
   filters: Omit<Filters, 'find'>
   until?: string // the time slider: graphs created up to this moment (ISO)
   sel?: { kind: 'g'; id: string } | { kind: 'n'; graph: string; nid: string } | { kind: 'h'; tag: string }
+  zoom?: boolean // move in on the selected item (Show on the map for a graph an answer made)
 }
 
 export function mapState(v: ViewState): MapState {
