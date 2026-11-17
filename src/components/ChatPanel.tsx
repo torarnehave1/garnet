@@ -34,15 +34,20 @@ export function ChatPanel({
   user,
   hidden,
   graph,
+  view,
   onClose,
   onWrote,
+  shownCount,
 }: {
   user: User
   hidden: boolean
   graph: { id: string; title: string } | null
+  view: () => string // read at send time, so each message carries what the map shows then
   onClose: () => void
   onWrote: () => void
+  shownCount: number
 }) {
+  const context = `Sees the ${shownCount} graphs on the map` + (graph ? ` · selected: ${graph.title}` : '')
   const [model, setModel] = useState(readModel)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [draft, setDraft] = useState('')
@@ -90,6 +95,7 @@ export function ChatPanel({
         model,
         history,
         graph?.id || null,
+        view(),
         (e) => {
           if (e.type === 'text') patchLast((m) => ({ ...m, text: m.text ? m.text + '\n\n' + e.content : e.content }))
           else if (e.type === 'model') patchLast((m) => ({ ...m, model: e.model }))
@@ -173,7 +179,7 @@ export function ChatPanel({
           send()
         }}
       >
-        {graph && <div className="cctx">This graph: {graph.title}</div>}
+        <div className="cctx">{context}</div>
         <textarea
           ref={box}
           rows={3}

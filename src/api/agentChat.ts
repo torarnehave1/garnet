@@ -19,18 +19,16 @@ export type ChatEvent =
   | { type: 'done' }
 
 // Garnet's own rule, carried into the chat: nothing changes without a yes.
-const WORK_CONTEXT = {
-  title: 'VEGR.AI MCP Server',
-  description:
-    'Chat beside Garnet, the network map of the person’s knowledge graphs. Reading is free. Before any tool that creates, changes, moves, deletes, publishes or sends anything, say exactly what will change (name the graph) and wait for the person’s yes in a new message.',
-  capabilities: [{ name: 'mcp_call', summary: 'Every tool of the VEGR.AI MCP server (server "vegr"), as the signed-in person.' }],
-}
+const RULE =
+  'Chat beside Garnet, the network map of the person’s knowledge graphs. Reading is free. Before any tool that creates, changes, moves, deletes, publishes or sends anything, say exactly what will change (name the graph) and wait for the person’s yes in a new message.'
+const CAPABILITIES = [{ name: 'mcp_call', summary: 'Every tool of the VEGR.AI MCP server (server "vegr"), as the signed-in person.' }]
 
 export async function sendChat(
   user: User,
   model: string,
   messages: ChatTurn[],
   graphId: string | null,
+  view: string, // what the map shows now (chatContext.ts)
   onEvent: (e: ChatEvent) => void,
   signal: AbortSignal,
 ): Promise<void> {
@@ -44,9 +42,12 @@ export async function sendChat(
       userId: user.email,
       authToken: user.token,
       model,
+      // The picked model answers; without this agent-worker treats a Claude pick as a ceiling and
+      // may answer with Haiku 5.5. "Auto" still chooses per message.
+      exactModel: true,
       messages,
       graphId: graphId || undefined,
-      workContext: WORK_CONTEXT,
+      workContext: { title: 'VEGR.AI MCP Server', description: RULE + '\n\n' + view, capabilities: CAPABILITIES },
     }),
     signal,
   })
