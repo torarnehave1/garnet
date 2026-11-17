@@ -103,6 +103,9 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 
 .panel { position: absolute; left: 16px; right: 16px; top: 16px; bottom: 16px; margin: auto; max-width: 420px; max-height: 560px; background: #101a2c; border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; z-index: 5; }
 .panelhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.panelsearch { display: flex; align-items: center; gap: 10px; padding: 10px 14px 4px; }
+.panelsearch input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.panelsearch .muted { white-space: nowrap; font-size: 12px; }
 .panellist { overflow: auto; padding: 6px 14px 12px; display: flex; flex-direction: column; }
 .panellist label { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(39, 56, 90, 0.5); cursor: pointer; }
 .panellist input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; flex: none; }
