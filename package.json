@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@xyflow/react": "^12.10.1",
     "d3-force": "^3.0.1",
     "d3-selection": "^3.0.1",
     "d3-transition": "^3.0.2",

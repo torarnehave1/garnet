@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearUser, completeMagicLink, magicInUrl, readUser } from './api/auth'
 import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, renameGraph, restoreGraph } from './api/kg'
 import type { McpError } from './api/mcp'
@@ -13,6 +13,9 @@ import { ImpersonationBar, isImpersonating, returnToOwnLogin } from './component
 import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
 import { TagPanel } from './components/TagPanel'
+import { isFlowGraph } from './lib/flow'
+// React Flow is loaded only when a flow is opened.
+const FlowPanel = lazy(() => import('./components/FlowPanel'))
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
 import {
   DEFAULT_FILTERS,
@@ -180,6 +183,14 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [dialog, setDialog] = useState<DialogSpec | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
+  // A graph with a flow node opens its flow in the right-hand panel when it, or one of its nodes, is
+  // clicked. Closed by hand, it stays closed until something is clicked again.
+  const [flowClosed, setFlowClosed] = useState<string | null>(null)
+  const flowGraph = selected?.kind === 'g' ? selected : selected?.kind === 'n' ? selected.parent : null
+  const flowOf =
+    flowGraph && isFlowGraph(flowGraph.types) && flowClosed !== flowGraph.id
+      ? { graph: flowGraph, step: selected?.kind === 'n' ? selected.nid : null }
+      : null
 
   const eff = useMemo(() => reconcile(filters, rows), [filters, rows])
   const effRef = useRef(eff)
@@ -199,6 +210,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       onSnapshot: setSnap,
       onSelect: (d) => {
         setSelected(d)
+        setFlowClosed(null)
         setMenu(null)
       },
       onContext: (g, x, y) => setMenu({ g, x, y }),
@@ -523,6 +535,17 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             setRows(next)
           }}
         />
+      )}
+      {flowOf && (
+        <Suspense fallback={null}>
+          <FlowPanel
+            user={user}
+            graphId={flowOf.graph.id}
+            title={flowOf.graph.title}
+            focus={flowOf.step}
+            onClose={() => setFlowClosed(flowOf.graph.id)}
+          />
+        </Suspense>
       )}
       {tagOpen && (
         <TagPanel
