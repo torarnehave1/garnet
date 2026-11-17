@@ -239,7 +239,7 @@ export function ChatPanel({
               <ul className="csteps">
                 {m.steps.map((s) =>
                   s.note ? (
-                    <li key={s.callId} className="note">
+                    <li key={s.callId} className="cnote">
                       {inlineMd(s.name)}
                     </li>
                   ) : (
