@@ -417,7 +417,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   }
 
   // Show on the map, for a graph a chat answer made or changed: kept in view if it is already
-  // there, otherwise the filters widen to its World. Then it is selected and the map moves to it.
+  // there, otherwise the filters show its World and its meta areas. Then it is selected and the map moves to it.
   function showGraph(id: string): boolean {
     const row = rows.find((r) => r.id === id)
     if (!row || !engine) return false
@@ -426,7 +426,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     const visible = shownRows(rows, eff).some((r) => r.id === id)
     restoreView({
       scope,
-      filters: visible ? current : { ...current, ...DEFAULT_FILTERS, world: row.world, only: current.only },
+      // Hidden by the filters: its World and its own meta areas, so the map shows the graph among its
+      // own topics (architect's choice 2026-11-17), not the whole World.
+      filters: visible ? current : { ...current, ...DEFAULT_FILTERS, world: row.world, tags: row.tags, only: current.only },
       sel: { kind: 'g', id },
       zoom: true,
     })
