@@ -159,3 +159,24 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .flowcanvas .react-flow__attribution { background: transparent; font-size: 9px; }
 .flowcanvas .react-flow__attribution a { color: var(--muted); }
 .fbox .react-flow__handle { width: 6px; height: 6px; min-width: 0; min-height: 0; background: #cbd5e1; border: 0; }
+
+/* The chat on the left (ChatPanel): any Agent-Builder chat model, with the VEGR.AI MCP tools. */
+.chatpanel { position: absolute; top: 16px; left: 16px; bottom: 16px; width: min(400px, calc(100% - 32px)); z-index: 7; display: flex; flex-direction: column; background: #101a2c; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.chatpanel[hidden] { display: none; }
+.chatpanel .x { background: transparent; color: var(--muted); min-width: 0; padding: 2px 8px; font-size: 16px; }
+.chatbar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.chatbar select { flex: 1 1 auto; max-width: none; }
+.chatlist { flex: 1 1 0; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+.cmsg { max-width: 100%; }
+.cmsg.user { align-self: flex-end; background: #1b2b47; border-radius: 12px 12px 2px 12px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmsg.assistant { align-self: stretch; }
+.cwho { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+.ctext { white-space: pre-wrap; overflow-wrap: anywhere; }
+.csteps { list-style: none; margin: 0 0 6px; padding: 0; font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.csteps .ok { color: #34d399; }
+.csteps .bad { color: var(--danger); }
+.cerr { color: var(--danger); margin-top: 4px; white-space: pre-wrap; }
+.chatform { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.chatform textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; resize: vertical; min-height: 60px; }
+.chatform button { align-self: flex-end; }
+.cctx { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

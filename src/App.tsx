@@ -5,6 +5,7 @@ import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { BulkTag } from './components/BulkTag'
 import { Card } from './components/Card'
+import { ChatPanel } from './components/ChatPanel'
 import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
@@ -206,6 +207,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   // A graph with a flow node opens its flow in the right-hand panel when it, or one of its nodes, is
   // clicked. Closed by hand, it stays closed until something is clicked again.
   const [flowClosed, setFlowClosed] = useState<string | null>(null)
+  // The chat on the left. Once opened it stays mounted, so closing it keeps the conversation.
+  const [chat, setChat] = useState<'never' | 'open' | 'closed'>('never')
   const flowGraph = selected?.kind === 'g' ? selected : selected?.kind === 'n' ? selected.parent : null
   const flowOf =
     flowGraph && isFlowGraph(flowGraph.types) && flowClosed !== flowGraph.id
@@ -544,6 +547,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       </div>
 
       <div className="authbar">
+        <button className="ghost" type="button" aria-pressed={chat === 'open'} onClick={() => setChat(chat === 'open' ? 'closed' : 'open')}>
+          Chat
+        </button>
         {isImpersonating() ? (
           <ImpersonationBar user={user} />
         ) : (
@@ -586,6 +592,15 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             keep.current = true
             setRows(next)
           }}
+        />
+      )}
+      {chat !== 'never' && (
+        <ChatPanel
+          user={user}
+          hidden={chat !== 'open'}
+          graph={flowGraph ? { id: flowGraph.id, title: flowGraph.title } : null}
+          onClose={() => setChat('closed')}
+          onWrote={() => refresh()}
         />
       )}
       {flowOf && (
