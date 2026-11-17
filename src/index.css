@@ -178,6 +178,14 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .csteps { list-style: none; margin: 0 0 6px; padding: 0; font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .csteps .ok { color: #34d399; }
 .csteps .bad { color: var(--danger); }
+.chist { list-style: none; margin: 0; padding: 4px 8px; max-height: 45%; overflow: auto; border-bottom: 1px solid var(--line); }
+.chist li { display: flex; align-items: center; gap: 4px; }
+.chist li.on .chist-open { color: var(--accent); }
+.chist-open { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 8px; text-align: left; background: none; border: 0; color: var(--ink); padding: 5px 6px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 13px; }
+.chist-open:hover { background: var(--bg); }
+.chist-open span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chist-open small { color: var(--muted); flex: none; }
+.chist-err { padding: 4px 14px; font-size: 12px; }
 .csteps .cnote { font-family: var(--body); font-style: italic; white-space: pre-wrap; margin: 2px 0; }
 .cerr { color: var(--danger); margin-top: 4px; white-space: pre-wrap; }
 .chatform { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); }
