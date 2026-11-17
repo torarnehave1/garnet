@@ -69,6 +69,6 @@ export function viewContext(v: ViewState): string {
     'Filters: ' + filters.join(' · '),
     `Chosen graphs: ${count}. Answer "how many" from this number, without a tool.`,
     `Clicked on the map: ${clicked}.`,
-    `To list or read the chosen graphs, call mcp_call with server "vegr", tool_name "graph_index" and exactly these arguments, adding brief:true; for more than 200, page with offset/limit 200 and wait for each page: ${JSON.stringify(indexArgs(v))}`,
+    `To list or read the chosen graphs, call mcp_call with server "vegr", tool_name "graph_index" and exactly these arguments: ${JSON.stringify(indexArgs(v))}. Always add brief:true and limit:40 (a longer answer is cut off before you see it); page on with offset 40, 80, … one call at a time. Add order:"newest" when the question is about the newest or latest graphs. Report only rows you have actually read; never fill in titles or dates you have not seen.`,
   ].join('\n')
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { sendChat, type ChatTurn } from '../api/agentChat'
 import { CHAT_MODELS, chatModelName, DEFAULT_CHAT_MODEL } from '../lib/chatModels'
-import { inlineMd } from '../lib/inlineMd'
+import { chatMd } from '../lib/inlineMd'
 import type { User } from '../lib/types'
 
 // A chat on the left, with any Agent-Builder chat model. Its tools are the VEGR.AI MCP server's,
@@ -166,7 +166,7 @@ export function ChatPanel({
                 ))}
               </ul>
             )}
-            {m.text && <div className="ctext">{m.role === 'assistant' ? inlineMd(m.text) : m.text}</div>}
+            {m.text && <div className="ctext">{m.role === 'assistant' ? chatMd(m.text) : m.text}</div>}
             {m.role === 'assistant' && !m.text && !m.error && busy && i === msgs.length - 1 && <div className="muted">Working…</div>}
             {m.error && <div className="cerr">{m.error}</div>}
           </div>
