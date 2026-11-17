@@ -15,7 +15,7 @@ import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
 import { TagPanel } from './components/TagPanel'
 import { isFlowGraph } from './lib/flow'
-import { viewContext } from './lib/chatContext'
+import { viewContext, viewLine } from './lib/chatContext'
 // React Flow is loaded only when a flow is opened.
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
@@ -600,7 +600,10 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           user={user}
           hidden={chat !== 'open'}
           graph={flowGraph ? { id: flowGraph.id, title: flowGraph.title } : null}
-          view={() => viewContext({ scope, filters: eff, shown: shownRows(rows, eff), kk: snap.kk, selected })}
+          view={() => {
+            const v = { scope, filters: eff, shown: shownRows(rows, eff), kk: snap.kk, selected }
+            return { text: viewContext(v), line: viewLine(v) }
+          }}
           shownCount={snap.kk}
           onClose={() => setChat('closed')}
           onWrote={() => refresh()}

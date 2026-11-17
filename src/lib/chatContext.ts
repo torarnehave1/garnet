@@ -41,7 +41,7 @@ export function indexArgs(v: ViewState): Record<string, unknown> {
   return a
 }
 
-export function viewContext(v: ViewState): string {
+function words(v: ViewState) {
   const f = v.filters
   const count = v.kk > 0 && v.kk < v.shown.length ? v.kk : v.shown.length
   const filters = [
@@ -54,7 +54,37 @@ export function viewContext(v: ViewState): string {
     f.since !== '*' ? `Start year: ${f.since}` : '',
     count < v.shown.length ? `Time slider: the oldest ${count} of ${v.shown.length}` : '',
   ].filter(Boolean)
+  return { count, filters }
+}
 
+/** What the map showed, in one line, kept with each question in the chat history. */
+export function viewLine(v: ViewState): string {
+  const f = v.filters
+  const sel = v.selected
+  const clicked = !sel
+    ? ''
+    : sel.kind === 'g'
+      ? sel.title
+      : sel.kind === 'n'
+        ? `${sel.label} (${sel.parent.title})`
+        : sel.tag
+  return [
+    v.scope === 'mine' ? 'Own graphs' : 'All graphs',
+    `World ${f.world === '*' ? 'all' : f.world || SHARED}`,
+    f.tags.length ? f.tags.join(' ') : '',
+    f.type !== '*' ? `node type ${f.type}` : '',
+    f.pub !== '*' ? `published ${f.pub}` : '',
+    f.year !== '*' ? `created ${f.year}` : '',
+    f.since !== '*' ? `from ${f.since}` : '',
+    `${words(v).count} graphs`,
+    clicked ? `clicked: ${clicked}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+export function viewContext(v: ViewState): string {
+  const { count, filters } = words(v)
   const sel = v.selected
   const clicked = !sel
     ? 'nothing'

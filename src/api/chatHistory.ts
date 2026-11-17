@@ -12,10 +12,16 @@ export interface ChatSession {
   graphId: string | null
   updatedAt: string
 }
+/** What the map showed when a question was asked (chatContext.ts): one line and the model's full view. */
+export interface ViewNote {
+  line: string
+  text: string
+}
 export interface SavedMessage {
   role: 'user' | 'assistant'
   content: string
   model?: string
+  context?: ViewNote
 }
 
 async function call<T>(user: User, path: string, init: RequestInit = {}): Promise<T> {
@@ -59,16 +65,16 @@ export async function addMessage(user: User, sessionId: string, m: SavedMessage)
       sessionId,
       role: m.role,
       content: m.content,
-      selectionMeta: m.model ? { model: m.model } : null,
+      // selection_meta holds Garnet's notes on a message: the model that answered, the map's view.
+      selectionMeta: m.model || m.context ? { model: m.model, context: m.context } : null,
     }),
   })
 }
 
 export async function loadMessages(user: User, sessionId: string): Promise<SavedMessage[]> {
-  const j = await call<{ messages?: { role: string; content?: string; selectionMeta?: { model?: string } | null }[] }>(
-    user,
-    `/messages?sessionId=${encodeURIComponent(sessionId)}&decrypt=1&limit=200`,
-  )
+  const j = await call<{
+    messages?: { role: string; content?: string; selectionMeta?: { model?: string; context?: ViewNote } | null }[]
+  }>(user, `/messages?sessionId=${encodeURIComponent(sessionId)}&decrypt=1&limit=200`)
   // Newest first from the store; the chat reads oldest first.
   return (j.messages || [])
     .slice()
@@ -78,6 +84,7 @@ export async function loadMessages(user: User, sessionId: string): Promise<Saved
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content || '',
       model: m.selectionMeta?.model,
+      context: m.selectionMeta?.context?.line ? m.selectionMeta.context : undefined,
     }))
 }
 

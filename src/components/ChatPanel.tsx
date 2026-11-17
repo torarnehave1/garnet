@@ -8,6 +8,7 @@ import {
   loadMessages,
   touchSession,
   type ChatSession,
+  type ViewNote,
 } from '../api/chatHistory'
 import {
   AUDIO_ACCEPT,
@@ -44,6 +45,7 @@ interface Msg {
   steps?: Step[]
   error?: string
   files?: Attachment[] // what went with a question (not kept in the saved history)
+  ctx?: ViewNote // what the map showed when the question was asked (kept in the history)
 }
 
 const MODEL_KEY = 'garnet-chat-model-v1'
@@ -68,7 +70,7 @@ export function ChatPanel({
   user: User
   hidden: boolean
   graph: { id: string; title: string } | null
-  view: () => string // read at send time, so each message carries what the map shows then
+  view: () => ViewNote // read at send time, so each message carries what the map shows then
   onClose: () => void
   onWrote: () => void
   shownCount: number
@@ -132,7 +134,7 @@ export function ChatPanel({
     setHistErr('')
     try {
       const saved = await loadMessages(user, s.id)
-      setMsgs(saved.map((m) => ({ role: m.role, text: m.content, model: m.model })))
+      setMsgs(saved.map((m) => ({ role: m.role, text: m.content, model: m.model, ctx: m.context })))
       sessionId.current = s.id
       setOpenId(s.id)
       setSessions(null)
@@ -153,7 +155,7 @@ export function ChatPanel({
   }
 
   // The question and its answer go to the chat history; the first one opens the session.
-  async function keep(question: string, answer: string, ran: string) {
+  async function keep(question: string, answer: string, ran: string, ctx: ViewNote) {
     try {
       const title = question.replace(/\s+/g, ' ').slice(0, 60)
       // Saves run one after another, so a quick second question cannot open a second session.
@@ -168,7 +170,7 @@ export function ChatPanel({
           msgs.find((m) => m.role === 'user')?.text.slice(0, 60) || title,
           graph?.id || null,
         )
-      await addMessage(user, sessionId.current, { role: 'user', content: question })
+      await addMessage(user, sessionId.current, { role: 'user', content: question, context: ctx })
       await addMessage(user, sessionId.current, { role: 'assistant', content: answer, model: ran })
     } catch (err) {
       setHistErr('Not saved to history: ' + (err instanceof Error ? err.message : String(err)))
@@ -200,11 +202,12 @@ export function ChatPanel({
   async function listen(file: File) {
     if (busy) return
     const question = `Transkriber lyd: «${file.name}»`
+    const ctx = view()
     setSessions(null)
     setHistErr('')
     setMsgs((ms) => [
       ...ms,
-      { role: 'user', text: question },
+      { role: 'user', text: question, ctx },
       { role: 'assistant', text: '', model: 'whisper-1', steps: [] },
     ])
     setBusy(true)
@@ -223,7 +226,7 @@ export function ChatPanel({
         text: answer,
         steps: [{ callId: 'audio', name: 'transcribe', ok: true, summary: '' }],
       }))
-      saving.current = keep(question, answer, 'whisper-1')
+      saving.current = keep(question, answer, 'whisper-1', ctx)
     } catch (err) {
       patchLast((m) => ({
         ...m,
@@ -250,13 +253,14 @@ export function ChatPanel({
         .map((m) => ({ role: m.role, content: m.role === 'user' ? toContent(m.text, m.files) : m.text })),
       { role: 'user', content: toContent(text, files) },
     ]
+    const ctx = view()
     setDraft('')
     setPending([])
     setSessions(null)
     setHistErr('')
     setMsgs((ms) => [
       ...ms,
-      { role: 'user', text, files: files.length ? files : undefined },
+      { role: 'user', text, files: files.length ? files : undefined, ctx },
       { role: 'assistant', text: '', model, steps: [] },
     ])
     setBusy(true)
@@ -273,7 +277,7 @@ export function ChatPanel({
         model,
         history,
         graph?.id || null,
-        view(),
+        ctx.text,
         (e) => {
           // Text written before a tool call is a working note ("96 graphs; fetching the newest…"),
           // which the final answer usually repeats. It moves among the steps, dim, so the answer is
@@ -341,7 +345,7 @@ export function ChatPanel({
       }
       // The saved question names its files (an image by its address); the file content is not kept.
       const asked = [text, files.length ? describe(files) : ''].filter(Boolean).join('\n\n')
-      if (answer.trim() && !ctl.signal.aborted) saving.current = keep(asked, answer.trim(), ran)
+      if (answer.trim() && !ctl.signal.aborted) saving.current = keep(asked, answer.trim(), ran, ctx)
       // A tool that may have changed something: the map reads the graphs again.
       if (wrote) onWrote()
     }
@@ -425,6 +429,12 @@ export function ChatPanel({
             )}
             {m.files && m.files.length > 0 && <Chips files={m.files} />}
             {m.text && <div className="ctext">{m.role === 'assistant' ? chatMd(m.text) : m.text}</div>}
+            {m.ctx && (
+              <details className="cview">
+                <summary title="What the map showed when this was asked">{m.ctx.line}</summary>
+                <pre>{m.ctx.text}</pre>
+              </details>
+            )}
             {m.role === 'assistant' && !m.text && !m.error && busy && i === msgs.length - 1 && (
               <div className="muted">Working…</div>
             )}

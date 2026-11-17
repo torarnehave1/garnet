@@ -201,6 +201,12 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .cchips .x { font-size: 13px; padding: 0 3px; }
 .cmsg.user .cchips { justify-content: flex-end; }
 .cfilehint { font-size: 12px; }
+.cview { margin-top: 4px; font-size: 11px; color: var(--muted); white-space: normal; }
+.cview summary { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cview[open] summary { white-space: normal; }
+.cview pre { white-space: pre-wrap; font-size: 11px; margin: 4px 0 0; max-height: 200px; overflow: auto; }
+.cmsg.user .cview { text-align: right; }
+.cmsg.user .cview pre { text-align: left; }
 .cctx { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cpara { margin: 0 0 8px; }
 .cpara:last-child, .clist:last-child { margin-bottom: 0; }
