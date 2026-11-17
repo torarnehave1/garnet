@@ -36,6 +36,9 @@ export function indexArgs(v: ViewState): Record<string, unknown> {
     const t = v.shown.map(when).sort((x, y) => x - y)[v.kk - 1]
     if (t && (!to || iso(t) < to)) to = iso(t)
   }
+  // The date range narrows further: the later start and the earlier end win.
+  if (f.dateFrom && (!from || f.dateFrom > from.slice(0, 10))) from = f.dateFrom
+  if (f.dateTo && (!to || f.dateTo < to.slice(0, 10))) to = f.dateTo
   if (from) a.createdFrom = from
   if (to) a.createdTo = to
   return a
@@ -52,6 +55,7 @@ function words(v: ViewState) {
     f.pub !== '*' ? `Published: ${f.pub}` : '',
     f.year !== '*' ? `Created in: ${f.year}` : '',
     f.since !== '*' ? `Start year: ${f.since}` : '',
+    f.dateFrom || f.dateTo ? `Created between: ${f.dateFrom || 'the beginning'} and ${f.dateTo || 'now'}` : '',
     count < v.shown.length ? `Time slider: the oldest ${count} of ${v.shown.length}` : '',
   ].filter(Boolean)
   return { count, filters }
@@ -111,6 +115,7 @@ export function viewLine(v: ViewState): string {
     f.pub !== '*' ? `published ${f.pub}` : '',
     f.year !== '*' ? `created ${f.year}` : '',
     f.since !== '*' ? `from ${f.since}` : '',
+    f.dateFrom || f.dateTo ? `created ${f.dateFrom || '…'} – ${f.dateTo || '…'}` : '',
     `${words(v).count} graph${words(v).count === 1 ? '' : 's'}`,
     clicked ? `clicked: ${clicked}` : '',
   ]

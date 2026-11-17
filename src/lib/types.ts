@@ -44,6 +44,8 @@ export interface Filters {
   pub: string
   year: string
   since: string
+  dateFrom: string // created on or after this day (YYYY-MM-DD, UTC), '' for no lower bound
+  dateTo: string // created on or before this day, '' for no upper bound
   world: string
 }
 

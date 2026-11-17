@@ -85,6 +85,8 @@ select { font: inherit; color: var(--ink); background: var(--bg); border: 1px so
 .latest b { color: var(--ink); font-weight: 500; }
 .opts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); }
 .opts label { display: flex; align-items: center; gap: 6px; }
+.daterange { display: flex; align-items: center; gap: 6px; }
+.daterange input[type='date'] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; color-scheme: dark; }
 .pickwrap { display: flex; align-items: center; gap: 6px; }
 button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-weight: 400; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

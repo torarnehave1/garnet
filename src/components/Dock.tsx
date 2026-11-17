@@ -79,6 +79,21 @@ export function Dock(p: DockProps) {
         </span>
         <Select id="since" label="Start year" value={f.since} options={p.sinceOptions} onChange={(v) => p.onFilter({ since: v })} />
         <Select id="year" label="Created in" value={f.year} options={p.yearOptions} onChange={(v) => p.onFilter({ year: v })} />
+        <span className="daterange">
+          <label htmlFor="dfrom">
+            Created from{' '}
+            <input id="dfrom" type="date" value={f.dateFrom} max={f.dateTo || undefined} onChange={(e) => p.onFilter({ dateFrom: e.target.value })} />
+          </label>{' '}
+          <label htmlFor="dto">
+            to{' '}
+            <input id="dto" type="date" value={f.dateTo} min={f.dateFrom || undefined} onChange={(e) => p.onFilter({ dateTo: e.target.value })} />
+          </label>
+          {(f.dateFrom || f.dateTo) && (
+            <button type="button" className="x" aria-label="Clear the date range" onClick={() => p.onFilter({ dateFrom: '', dateTo: '' })}>
+              ×
+            </button>
+          )}
+        </span>
         <label htmlFor="ntype">
           Has node type{' '}
           <input

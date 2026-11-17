@@ -109,6 +109,12 @@ export function shownRows(rows: Row[], f: Filters): Row[] {
   return worldRows(rows, f.world).filter((r) => {
     if (f.year !== '*' && String(yearOf(r)) !== f.year) return false
     if (f.since !== '*' && yearOf(r) < +f.since) return false
+    if (f.dateFrom || f.dateTo) {
+      const t = when(r)
+      if (!t) return false // no creation time: outside any date range
+      if (f.dateFrom && t < dayStart(f.dateFrom)) return false
+      if (f.dateTo && t > dayStart(f.dateTo) + 86400000 - 1) return false
+    }
     if (tags.size && !r.tags.some((x) => tags.has(x))) return false
     if (f.type !== '*' && (r.types || []).indexOf(f.type) < 0) return false
     if (f.pub === 'live' && !r.live) return false
@@ -118,7 +124,10 @@ export function shownRows(rows: Row[], f: Filters): Row[] {
   })
 }
 
-export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: true, pub: '*', year: '*', since: '*', world: '*' }
+export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: true, pub: '*', year: '*', since: '*', world: '*', dateFrom: '', dateTo: '' }
+
+// A day as the date filter reads it: from midnight UTC, the way the server's graph_index reads a bare date.
+export const dayStart = (d: string) => Date.parse(d + 'T00:00:00Z')
 
 export function monthOf(t: number) {
   return new Date(t).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
