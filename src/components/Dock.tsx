@@ -89,7 +89,7 @@ export function Dock(p: DockProps) {
             <input id="dto" type="date" value={f.dateTo} min={f.dateFrom || undefined} onChange={(e) => p.onFilter({ dateTo: e.target.value })} />
           </label>
           {(f.dateFrom || f.dateTo) && (
-            <button type="button" className="x" aria-label="Clear the date range" onClick={() => p.onFilter({ dateFrom: '', dateTo: '' })}>
+            <button type="button" className="ghost dateclear" aria-label="Clear the date range" title="Clear the date range" onClick={() => p.onFilter({ dateFrom: '', dateTo: '' })}>
               ×
             </button>
           )}
