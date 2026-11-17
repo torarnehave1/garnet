@@ -57,6 +57,40 @@ function words(v: ViewState) {
   return { count, filters }
 }
 
+/** What it takes to set the map back to this view (the chat history keeps it with each question). */
+export interface MapState {
+  scope: Scope
+  filters: Omit<Filters, 'find'>
+  until?: string // the time slider: graphs created up to this moment (ISO)
+  sel?: { kind: 'g'; id: string } | { kind: 'n'; graph: string; nid: string } | { kind: 'h'; tag: string }
+}
+
+export function mapState(v: ViewState): MapState {
+  const { find: _find, ...filters } = v.filters
+  void _find
+  const st: MapState = { scope: v.scope, filters }
+  if (v.kk > 0 && v.kk < v.shown.length) {
+    const t = v.shown.map(when).sort((x, y) => x - y)[v.kk - 1]
+    if (t) st.until = iso(t)
+  }
+  const sel = v.selected
+  if (sel)
+    st.sel =
+      sel.kind === 'g'
+        ? { kind: 'g', id: sel.id }
+        : sel.kind === 'n'
+          ? { kind: 'n', graph: sel.parent.id, nid: sel.nid }
+          : { kind: 'h', tag: sel.tag }
+  return st
+}
+
+/** How many of the shown graphs the slider shows for a saved cut (all of them without one). */
+export function kOf(shown: Row[], until?: string): number {
+  if (!until) return shown.length
+  const t = Date.parse(until)
+  return shown.filter((r) => when(r) <= t).length
+}
+
 /** What the map showed, in one line, kept with each question in the chat history. */
 export function viewLine(v: ViewState): string {
   const f = v.filters

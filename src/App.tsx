@@ -15,7 +15,7 @@ import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
 import { TagPanel } from './components/TagPanel'
 import { isFlowGraph } from './lib/flow'
-import { viewContext, viewLine } from './lib/chatContext'
+import { kOf, mapState, viewContext, viewLine, type MapState } from './lib/chatContext'
 // React Flow is loaded only when a flow is opened.
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
@@ -36,6 +36,25 @@ import {
   type Option,
 } from './lib/rows'
 import type { Filters, Row, Scope, User } from './lib/types'
+
+/* ---------- a chat question's view, set back on the map ---------- */
+// After each build: the time slider to the saved cut and the clicked item, found again by id.
+// `last`: no second build (with the nodes) follows, so the wish is done.
+function placeRestore(engine: Engine, want: { current: MapState | null }, shown: Row[], last: boolean) {
+  const r = want.current
+  if (!r) return
+  if (r.until) engine.setK(kOf(shown, r.until))
+  const s = r.sel
+  const item: Item | undefined = !s
+    ? undefined
+    : s.kind === 'g'
+      ? engine.graphs.find((g) => g.id === s.id)
+      : s.kind === 'n'
+        ? engine.inner.find((o) => o.nid === s.nid && o.parent.id === s.graph)
+        : engine.hubs.find((h) => h.tag === s.tag)
+  if (item || last) engine.select(item || null)
+  if (last) want.current = null
+}
 
 /* ---------- what is kept in this browser ---------- */
 const VIEW_KEY = 'garnet-view-v1'
@@ -189,6 +208,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [rows, setRows] = useState<Row[]>([])
   const [loaded, setLoaded] = useState(false)
   const keep = useRef(true) // The next render follows a new read of the graphs, not a filter changed by hand.
+  const restoreWant = useRef<MapState | null>(null) // a chat question's view, waiting for the map to draw it
   const [freshness, setFreshness] = useState('')
   const [progress, setProgress] = useState('')
   const [note, setNote] = useState('')
@@ -319,6 +339,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     setNodeNote('')
     const shown = shownRows(rows, f)
     engine.build(shown, null, f.type, f.only, !loaded)
+    const wantNodes = !!(shown.length && (f.tags.length || ty))
+    placeRestore(engine, restoreWant, shown, !wantNodes)
     if (!shown.length) return
     // Back to the remembered place, or keep the picture where it is, or frame the result.
     const settle = () => {
@@ -342,6 +364,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         const detail = Object.assign({}, ...parts)
         setNodeNote('')
         engine.build(shown, detail, f.type, f.only, !loaded)
+        placeRestore(engine, restoreWant, shown, true)
         settle()
         // Task colours: read each graph with tasks once (kept for the session).
         for (const id of engine.graphsWithTasks())
@@ -356,6 +379,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       })
       .catch((e) => {
         if (mine !== renderToken.current) return
+        restoreWant.current = null
         setNodeNote('')
         const msg = (e as Error)?.message || 'unknown error'
         setNote(
@@ -365,6 +389,28 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         )
       })
   }, [engine, rows, loaded, effKey])
+
+  /* ---------- a chat question's view, set back on the map ---------- */
+  function restoreView(st: MapState) {
+    engine?.pause()
+    const next: Filters = { ...DEFAULT_FILTERS, ...st.filters, find: '' }
+    const same = st.scope === scope && JSON.stringify({ ...next, find: '' }) === effKey
+    restoreWant.current = st
+    keep.current = false
+    focusWant.current = null
+    storeView({ f: next, focus: null })
+    if (st.scope !== scope) {
+      try {
+        localStorage.setItem(SCOPE_KEY, st.scope)
+      } catch {
+        /* storage blocked */
+      }
+      setScope(st.scope)
+    }
+    setFilters(next)
+    // Nothing to redraw: set the slider and the click on what is there now.
+    if (same && engine) placeRestore(engine, restoreWant, shownRows(rows, eff), true)
+  }
 
   /* ---------- filters changed by hand ---------- */
   function changeFilters(p: Partial<Filters>) {
@@ -602,8 +648,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           graph={flowGraph ? { id: flowGraph.id, title: flowGraph.title } : null}
           view={() => {
             const v = { scope, filters: eff, shown: shownRows(rows, eff), kk: snap.kk, selected }
-            return { text: viewContext(v), line: viewLine(v) }
+            return { text: viewContext(v), line: viewLine(v), state: mapState(v) }
           }}
+          onRestore={restoreView}
           shownCount={snap.kk}
           onClose={() => setChat('closed')}
           onWrote={() => refresh()}

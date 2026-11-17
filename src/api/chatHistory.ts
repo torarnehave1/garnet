@@ -1,3 +1,4 @@
+import type { MapState } from '../lib/chatContext'
 import type { User } from '../lib/types'
 
 // Garnet's chats are kept in the same store as Agent-Builder's (chat-history-worker), marked
@@ -16,6 +17,7 @@ export interface ChatSession {
 export interface ViewNote {
   line: string
   text: string
+  state?: MapState // to set the map back (absent on questions saved before 2026-11-17 evening)
 }
 export interface SavedMessage {
   role: 'user' | 'assistant'

@@ -207,6 +207,8 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .cview pre { white-space: pre-wrap; font-size: 11px; margin: 4px 0 0; max-height: 200px; overflow: auto; }
 .cmsg.user .cview { text-align: right; }
 .cmsg.user .cview pre { text-align: left; }
+.cviewgo { font-size: 11px; padding: 1px 8px; margin-top: 4px; }
+.cmsg.user .cviewgo { display: block; margin-left: auto; }
 .cctx { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cpara { margin: 0 0 8px; }
 .cpara:last-child, .clist:last-child { margin-bottom: 0; }

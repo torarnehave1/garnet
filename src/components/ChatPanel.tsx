@@ -65,6 +65,7 @@ export function ChatPanel({
   view,
   onClose,
   onWrote,
+  onRestore,
   shownCount,
 }: {
   user: User
@@ -73,6 +74,7 @@ export function ChatPanel({
   view: () => ViewNote // read at send time, so each message carries what the map shows then
   onClose: () => void
   onWrote: () => void
+  onRestore: (st: NonNullable<ViewNote['state']>) => void // set the map back to a question's view
   shownCount: number
 }) {
   const context = `Sees the ${shownCount} graphs on the map` + (graph ? ` · selected: ${graph.title}` : '')
@@ -434,6 +436,17 @@ export function ChatPanel({
                 <summary title="What the map showed when this was asked">{m.ctx.line}</summary>
                 <pre>{m.ctx.text}</pre>
               </details>
+            )}
+            {m.ctx?.state && (
+              <button
+                type="button"
+                className="ghost cviewgo"
+                disabled={busy}
+                title="Set the map's filters, time slider and click back to when this was asked"
+                onClick={() => onRestore(m.ctx!.state!)}
+              >
+                Show this on the map
+              </button>
             )}
             {m.role === 'assistant' && !m.text && !m.error && busy && i === msgs.length - 1 && (
               <div className="muted">Working…</div>
