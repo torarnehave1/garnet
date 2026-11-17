@@ -7,7 +7,7 @@ const CHAT_URL = 'https://agent.vegvisr.org/chat'
 
 export interface ChatTurn {
   role: 'user' | 'assistant'
-  content: string
+  content: string | unknown[] // blocks (image, document, text) when files are attached (attachments.ts)
 }
 
 export type ChatEvent =
@@ -21,7 +21,9 @@ export type ChatEvent =
 // Garnet's own rule, carried into the chat: nothing changes without a yes.
 const RULE =
   'Chat beside Garnet, the network map of the person’s knowledge graphs. Reading is free. Before any tool that creates, changes, moves, deletes, publishes or sends anything, say exactly what will change (name the graph) and wait for the person’s yes in a new message.'
-const CAPABILITIES = [{ name: 'mcp_call', summary: 'Every tool of the VEGR.AI MCP server (server "vegr"), as the signed-in person.' }]
+const CAPABILITIES = [
+  { name: 'mcp_call', summary: 'Every tool of the VEGR.AI MCP server (server "vegr"), as the signed-in person.' },
+]
 
 export async function sendChat(
   user: User,
@@ -90,10 +92,16 @@ export async function sendChat(
       else if (name === 'tool_call') {
         const input = (d.input || {}) as Record<string, unknown>
         // mcp_call names the MCP tool it runs; without one it lists the tools.
-        const name = d.tool === 'mcp_call' ? String(input.tool_name || input.describe_tool || 'list tools') : String(d.tool)
+        const name =
+          d.tool === 'mcp_call' ? String(input.tool_name || input.describe_tool || 'list tools') : String(d.tool)
         onEvent({ type: 'tool_call', callId: String(d.callId), tool: String(d.tool), name })
       } else if (name === 'tool_result')
-        onEvent({ type: 'tool_result', callId: String(d.callId), ok: d.success !== false, summary: String(d.summary || d.error || '') })
+        onEvent({
+          type: 'tool_result',
+          callId: String(d.callId),
+          ok: d.success !== false,
+          summary: String(d.summary || d.error || ''),
+        })
       else if (name === 'error') onEvent({ type: 'error', error: String(d.error || 'The chat stopped with an error.') })
       else if (name === 'done') onEvent({ type: 'done' })
     }

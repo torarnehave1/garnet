@@ -9,6 +9,18 @@ import {
   touchSession,
   type ChatSession,
 } from '../api/chatHistory'
+import {
+  AUDIO_ACCEPT,
+  describe,
+  FILE_ACCEPT,
+  IMAGE_ACCEPT,
+  isClaude,
+  readFile,
+  toContent,
+  transcribe,
+  uploadImage,
+  type Attachment,
+} from '../lib/attachments'
 import { CHAT_MODELS, chatModelName, DEFAULT_CHAT_MODEL } from '../lib/chatModels'
 import { chatMd, inlineMd } from '../lib/inlineMd'
 import type { User } from '../lib/types'
@@ -16,7 +28,8 @@ import type { User } from '../lib/types'
 // A chat on the left, with any Agent-Builder chat model. Its tools are the VEGR.AI MCP server's,
 // as the signed-in person (agentChat.ts). The selected graph is passed along as "this graph".
 // Each question and its answer are kept in Agent-Builder's chat history, marked "garnet"
-// (chatHistory.ts); History reopens an earlier chat.
+// (chatHistory.ts); History reopens an earlier chat. Images, PDFs and text files go with a message;
+// an audio file is transcribed into the chat (attachments.ts).
 interface Step {
   callId: string
   name: string
@@ -30,6 +43,7 @@ interface Msg {
   model?: string
   steps?: Step[]
   error?: string
+  files?: Attachment[] // what went with a question (not kept in the saved history)
 }
 
 const MODEL_KEY = 'garnet-chat-model-v1'
@@ -72,6 +86,12 @@ export function ChatPanel({
   const abort = useRef<AbortController | null>(null)
   const list = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
+  const [pending, setPending] = useState<Attachment[]>([]) // files waiting to go with the next message
+  const [uploading, setUploading] = useState(0)
+  const [fileErr, setFileErr] = useState('')
+  const imageIn = useRef<HTMLInputElement>(null)
+  const fileIn = useRef<HTMLInputElement>(null)
+  const audioIn = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight })
@@ -155,20 +175,90 @@ export function ChatPanel({
     }
   }
 
+  // Images are uploaded to the person's photos at once; PDFs and text files are read in the browser.
+  async function attach(files: File[]) {
+    setFileErr('')
+    for (const f of files) {
+      if (f.type.startsWith('audio/') || /\.(wav|mp3|m4a|aac|ogg|opus)$/i.test(f.name)) {
+        void listen(f)
+        continue
+      }
+      const image = f.type.startsWith('image/')
+      if (image) setUploading((n) => n + 1)
+      try {
+        const a = image ? await uploadImage(user, f) : await readFile(f)
+        setPending((p) => [...p, a])
+      } catch (err) {
+        setFileErr(err instanceof Error ? err.message : String(err))
+      } finally {
+        if (image) setUploading((n) => n - 1)
+      }
+    }
+  }
+
+  // An audio file becomes a transcript in the chat, which later questions can use.
+  async function listen(file: File) {
+    if (busy) return
+    const question = `Transkriber lyd: «${file.name}»`
+    setSessions(null)
+    setHistErr('')
+    setMsgs((ms) => [
+      ...ms,
+      { role: 'user', text: question },
+      { role: 'assistant', text: '', model: 'whisper-1', steps: [] },
+    ])
+    setBusy(true)
+    const ctl = new AbortController()
+    abort.current = ctl
+    try {
+      const text = await transcribe(
+        file,
+        '',
+        (status) => patchLast((m) => ({ ...m, steps: [{ callId: 'audio', name: status, ok: null, summary: '' }] })),
+        ctl.signal,
+      )
+      const answer = `**Transkripsjon av «${file.name}»**\n\n${text || '(Ingen tale funnet)'}`
+      patchLast((m) => ({
+        ...m,
+        text: answer,
+        steps: [{ callId: 'audio', name: 'transcribe', ok: true, summary: '' }],
+      }))
+      saving.current = keep(question, answer, 'whisper-1')
+    } catch (err) {
+      patchLast((m) => ({
+        ...m,
+        steps: [],
+        error: ctl.signal.aborted ? 'Stopped.' : err instanceof Error ? err.message : String(err),
+      }))
+    } finally {
+      setBusy(false)
+      abort.current = null
+    }
+  }
+
   // Patch the answer being written (always the last message).
   const patchLast = (f: (m: Msg) => Msg) => setMsgs((ms) => ms.map((m, i) => (i === ms.length - 1 ? f(m) : m)))
 
   async function send() {
     const text = draft.trim()
-    if (!text || busy) return
+    const files = pending
+    if ((!text && !files.length) || busy || uploading) return
+    // Earlier questions go with their files again, so a follow-up still sees the PDF or image.
     const history: ChatTurn[] = [
-      ...msgs.filter((m) => m.text).map((m) => ({ role: m.role, content: m.text })),
-      { role: 'user', content: text },
+      ...msgs
+        .filter((m) => m.text || m.files?.length)
+        .map((m) => ({ role: m.role, content: m.role === 'user' ? toContent(m.text, m.files) : m.text })),
+      { role: 'user', content: toContent(text, files) },
     ]
     setDraft('')
+    setPending([])
     setSessions(null)
     setHistErr('')
-    setMsgs((ms) => [...ms, { role: 'user', text }, { role: 'assistant', text: '', model, steps: [] }])
+    setMsgs((ms) => [
+      ...ms,
+      { role: 'user', text, files: files.length ? files : undefined },
+      { role: 'assistant', text: '', model, steps: [] },
+    ])
     setBusy(true)
     const ctl = new AbortController()
     abort.current = ctl
@@ -249,7 +339,9 @@ export function ChatPanel({
           return { ...m, text: lastNote, steps: steps.filter((_, j) => j !== at) }
         })
       }
-      if (answer.trim() && !ctl.signal.aborted) saving.current = keep(text, answer.trim(), ran)
+      // The saved question names its files (an image by its address); the file content is not kept.
+      const asked = [text, files.length ? describe(files) : ''].filter(Boolean).join('\n\n')
+      if (answer.trim() && !ctl.signal.aborted) saving.current = keep(asked, answer.trim(), ran)
       // A tool that may have changed something: the map reads the graphs again.
       if (wrote) onWrote()
     }
@@ -331,6 +423,7 @@ export function ChatPanel({
                 )}
               </ul>
             )}
+            {m.files && m.files.length > 0 && <Chips files={m.files} />}
             {m.text && <div className="ctext">{m.role === 'assistant' ? chatMd(m.text) : m.text}</div>}
             {m.role === 'assistant' && !m.text && !m.error && busy && i === msgs.length - 1 && (
               <div className="muted">Working…</div>
@@ -341,12 +434,30 @@ export function ChatPanel({
       </div>
       <form
         className="chatform"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (!busy) void attach(Array.from(e.dataTransfer.files || []))
+        }}
         onSubmit={(e) => {
           e.preventDefault()
           send()
         }}
       >
         <div className="cctx">{context}</div>
+        {(pending.length > 0 || uploading > 0) && (
+          <Chips
+            files={pending}
+            uploading={uploading}
+            onRemove={(i) => setPending((p) => p.filter((_, j) => j !== i))}
+          />
+        )}
+        {pending.some((f) => f.kind === 'pdf') && !isClaude(model) && (
+          <div className="muted cfilehint">
+            Only Claude models read a PDF; {chatModelName(model)} gets its name only.
+          </div>
+        )}
+        {fileErr && <div className="cerr">{fileErr}</div>}
         <textarea
           ref={box}
           rows={3}
@@ -354,6 +465,13 @@ export function ChatPanel({
           placeholder="Message…"
           aria-label="Message"
           onChange={(e) => setDraft(e.target.value)}
+          onPaste={(e) => {
+            const imgs = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
+            if (imgs.length) {
+              e.preventDefault()
+              void attach(imgs)
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
@@ -361,16 +479,111 @@ export function ChatPanel({
             }
           }}
         />
-        {busy ? (
-          <button type="button" onClick={() => abort.current?.abort()}>
-            Stop
+        <div className="chatactions">
+          <button
+            type="button"
+            className="ghost"
+            disabled={busy}
+            onClick={() => imageIn.current?.click()}
+            title="Attach images (uploaded to your photos)"
+          >
+            Image
           </button>
-        ) : (
-          <button type="submit" disabled={!draft.trim()}>
-            Send
+          <button
+            type="button"
+            className="ghost"
+            disabled={busy}
+            onClick={() => fileIn.current?.click()}
+            title="Attach a PDF or text file"
+          >
+            File
           </button>
-        )}
+          <button
+            type="button"
+            className="ghost"
+            disabled={busy}
+            onClick={() => audioIn.current?.click()}
+            title="Transcribe an audio file"
+          >
+            Audio
+          </button>
+          {busy ? (
+            <button type="button" onClick={() => abort.current?.abort()}>
+              Stop
+            </button>
+          ) : (
+            <button type="submit" disabled={(!draft.trim() && !pending.length) || uploading > 0}>
+              Send
+            </button>
+          )}
+        </div>
+        <input
+          ref={imageIn}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          multiple
+          hidden
+          onChange={(e) => {
+            void attach(Array.from(e.target.files || []))
+            e.target.value = ''
+          }}
+        />
+        <input
+          ref={fileIn}
+          type="file"
+          accept={FILE_ACCEPT}
+          multiple
+          hidden
+          onChange={(e) => {
+            void attach(Array.from(e.target.files || []))
+            e.target.value = ''
+          }}
+        />
+        <input
+          ref={audioIn}
+          type="file"
+          accept={AUDIO_ACCEPT}
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) void listen(f)
+          }}
+        />
       </form>
     </aside>
+  )
+}
+
+// Files with a message: images as small pictures, other files by name.
+function Chips({
+  files,
+  uploading = 0,
+  onRemove,
+}: {
+  files: Attachment[]
+  uploading?: number
+  onRemove?: (i: number) => void
+}) {
+  return (
+    <ul className="cchips">
+      {files.map((f, i) => (
+        <li key={i} title={f.name}>
+          {f.kind === 'image' ? (
+            <a href={f.url} target="_blank" rel="noreferrer">
+              <img src={f.url + (f.url.includes('?') ? '&' : '?') + 'w=96&h=96&fit=crop'} alt={f.name} />
+            </a>
+          ) : (
+            <span className="cfile">{(f.kind === 'pdf' ? 'PDF · ' : '') + f.name}</span>
+          )}
+          {onRemove && (
+            <button type="button" className="x" aria-label={`Remove ${f.name}`} onClick={() => onRemove(i)}>
+              ×
+            </button>
+          )}
+        </li>
+      ))}
+      {uploading > 0 && <li className="muted">Uploading {uploading}…</li>}
+    </ul>
   )
 }
