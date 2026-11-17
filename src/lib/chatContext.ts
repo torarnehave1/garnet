@@ -42,11 +42,11 @@ export function viewContext(v: ViewState): string {
 
   const listed = onMap.slice(0, MAX_LISTED).map((r) => `- ${r.title || '(untitled)'} · ${r.id}${r.world ? ' · ' + r.world : ''}${r.tags.length ? ' · ' + r.tags.join(' ') : ''}`)
   return [
-    'WHAT THE PERSON SEES IN GARNET NOW (the network map beside this chat). "These graphs", "the ones shown/chosen here" and similar mean exactly the graphs listed below; answer counts from this list, not from a tool.',
+    'WHAT THE PERSON SEES IN GARNET NOW (the network map beside this chat). The person CHOOSES graphs with the filters below: "chosen", "selected", "valgt", "these graphs", "the ones here" mean exactly the graphs listed below. Answer counts and lists from this list, not from a tool. A clicked item is named separately; use it for "this graph" / "denne grafen".',
     'Filters: ' + filters.join(' · '),
-    `On the map: ${onMap.length} graphs${onMap.length < v.shown.length ? ` (the time slider shows the oldest ${onMap.length} of ${v.shown.length} that pass the filters)` : ''}.`,
-    `Selected: ${selected}.`,
-    `Graphs on the map (title · graphId · World · meta areas)${onMap.length > MAX_LISTED ? `, the first ${MAX_LISTED} of ${onMap.length}` : ''}:`,
+    `Chosen graphs on the map: ${onMap.length}${onMap.length < v.shown.length ? ` (the time slider shows the oldest ${onMap.length} of ${v.shown.length} that pass the filters)` : ''}.`,
+    `Clicked on the map: ${selected}.`,
+    `The chosen graphs (title · graphId · World · meta areas)${onMap.length > MAX_LISTED ? `, the first ${MAX_LISTED} of ${onMap.length}` : ''}:`,
     ...listed,
   ].join('\n')
 }
