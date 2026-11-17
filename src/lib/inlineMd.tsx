@@ -35,7 +35,14 @@ export function inlineMd(text: string): ReactNode[] {
 
 const isRow = (l: string) => /^\s*\|.*\|\s*$/.test(l)
 const isRule = (l: string) => /^\s*\|[\s:|-]+\|\s*$/.test(l) && l.includes('-')
-const cells = (l: string) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim())
+// A cell may hold an escaped pipe ("torarnehave.no \\| Hjemmeside"): split only on bare pipes.
+const cells = (l: string) =>
+  l
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/(?<!\\)\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((c) => c.replace(/\\\|/g, '|').trim())
 
 // Text with pipe tables drawn as tables; everything else goes through inlineMd.
 export function chatMd(text: string): ReactNode[] {
