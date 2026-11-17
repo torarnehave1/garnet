@@ -165,7 +165,10 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .chatpanel[hidden] { display: none; }
 .chatpanel .x { background: transparent; color: var(--muted); min-width: 0; padding: 2px 8px; font-size: 16px; }
 .chatbar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); }
-.chatbar select { flex: 1 1 auto; max-width: none; }
+.chatbar select { flex: 1 1 auto; max-width: none; min-width: 0; }
+.chatbar button { flex: none; white-space: nowrap; }
+.ctext a { color: var(--accent); }
+.ctext code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: #0b1220; border-radius: 4px; padding: 0 3px; }
 .chatlist { flex: 1 1 0; overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
 .cmsg { max-width: 100%; }
 .cmsg.user { align-self: flex-end; background: #1b2b47; border-radius: 12px 12px 2px 12px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
