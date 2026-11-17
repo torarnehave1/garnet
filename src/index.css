@@ -201,6 +201,8 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .chead:first-child { margin-top: 0; }
 .clist { margin: 0 0 8px; padding-left: 20px; white-space: normal; }
 .clist li { margin: 2px 0; white-space: pre-wrap; }
+.ccode { margin: 0 0 8px; padding: 8px 10px; background: #0b1220; border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: 360px; white-space: pre; font-size: 12px; }
+.ccode code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .crule { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .ctable { border-collapse: collapse; margin: 6px 0; font-size: 12px; white-space: normal; width: 100%; }
 .ctable th, .ctable td { border: 1px solid var(--line); padding: 3px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }

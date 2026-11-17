@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 // The little Markdown chat models write: **bold**, *italic*, `code`, [text](https://…), bare https://
-// links; and as blocks: # headings, - and 1. lists, --- rules and pipe tables. Built as React nodes, never as HTML, so a model's text cannot inject markup.
+// links; and as blocks: ``` code, # headings, - and 1. lists, --- rules and pipe tables. Built as React nodes, never as HTML, so a model's text cannot inject markup.
 const TOKEN =
   /(\*\*[^*\n]+\*\*|\*[^*\s](?:[^*\n]*[^*\s])?\*|`[^`\n]+`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s)<]*[^\s)<.,;:!?'"])/g
 
@@ -71,6 +71,20 @@ export function chatMd(text: string): ReactNode[] {
   }
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]
+    // A fenced code block is shown as it is: nothing inside it is read as Markdown.
+    const fence = l.match(/^\s*(```+|~~~+)\s*([\w+-]*)/)
+    if (fence) {
+      flush()
+      const code: string[] = []
+      i++
+      while (i < lines.length && !lines[i].trim().startsWith(fence[1])) code.push(lines[i++])
+      out.push(
+        <pre key={k++} className="ccode" data-lang={fence[2] || undefined}>
+          <code>{code.join('\n')}</code>
+        </pre>,
+      )
+      continue
+    }
     if (isRow(l) && i + 1 < lines.length && isRule(lines[i + 1])) {
       flush()
       const head = cells(l)
