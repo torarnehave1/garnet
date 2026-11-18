@@ -5,6 +5,7 @@ import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } f
 import { courseOrder, flowOrder, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
 import { beat, PULSE_PLAIN, pulseColor, pulseText, ripples, rippleSpan, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
+import { typeIcon } from '../lib/typeIcons'
 import type { KgGraph, Row } from '../lib/types'
 import { SEED } from './seed'
 
@@ -109,6 +110,8 @@ export interface EngineEvents {
   onUserMove(): void
 }
 
+const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
+const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
 const SPREAD_K = 12 // From this zoom (as the Zoom chip shows it), node names spread out.
 const STOP = new Set(
   'with from that this what have your about into their they will been were when which there than then also only over under more most some such these those just like for and the med for som det den der har ikke eller til fra hva hvordan hvorfor som'.split(' '),
@@ -874,6 +877,7 @@ export class Engine {
         ctx.arc(d.x, d.y, d.r, 0, 6.2832)
         ctx.fill()
       }
+      this.drawTypeIcons(kk)
     }
     // With the pulse layer on, graphs without a change in the week step back.
     const pulseOn = this.pulseMode !== 'off' && !this.skeleton && this.pulse.size > 0
@@ -961,6 +965,33 @@ export class Engine {
   }
   // A ring round every graph that was changed in the week. Colour: the ring's colour is the count.
   // Count: one colour, the number is written beside it. Beat: one colour, a faster beat for more.
+  // A node's type as an icon inside its dot or square, once the node is large enough on the
+  // screen to hold one. Further out, the dots stay plain.
+  private drawTypeIcons(kk: number) {
+    const { ctx, T, W, H } = this
+    if (!this.inner.length) return
+    ctx.strokeStyle = '#0b1220'
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    for (const d of this.inner) {
+      if (d.order >= kk) continue
+      const px = d.r * T.k
+      if (px < ICON_MIN_PX) continue
+      const sx = d.x * T.k + T.x
+      const sy = d.y * T.k + T.y
+      if (sx < -px || sy < -px || sx > W + px || sy > H + px) continue // outside the window
+      const icon = typeIcon(d.type)
+      if (!icon) continue
+      const s = (d.r * ICON_FILL * 2) / 24
+      ctx.globalAlpha = this.isNear(d) ? 0.9 : 0.12
+      ctx.save()
+      ctx.translate(d.x - 12 * s, d.y - 12 * s)
+      ctx.scale(s, s)
+      ctx.lineWidth = 2.2
+      ctx.stroke(icon)
+      ctx.restore()
+    }
+  }
   private drawPulse(kk: number, now: number) {
     const { ctx, T } = this
     const px = 1 / T.k
