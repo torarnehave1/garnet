@@ -104,6 +104,14 @@ export function typeList(rows: Row[], find: string): { all: [string, number][]; 
   return { all, names }
 }
 
+// When the graph was last updated (ms), 0 when the index gave no time. A time without a zone is UTC.
+export function updatedMs(r: { updated: string }): number {
+  if (!r.updated) return 0
+  const c = String(r.updated).trim().replace(' ', 'T')
+  const t = Date.parse(c + (/[zZ]|[+-]\d\d:?\d\d$/.test(c) ? '' : 'Z'))
+  return isNaN(t) ? 0 : t
+}
+
 export function shownRows(rows: Row[], f: Filters): Row[] {
   const tags = new Set(f.tags)
   return worldRows(rows, f.world).filter((r) => {
@@ -115,6 +123,12 @@ export function shownRows(rows: Row[], f: Filters): Row[] {
       if (f.dateFrom && t < dayStart(f.dateFrom)) return false
       if (f.dateTo && t > dayStart(f.dateTo) + 86400000 - 1) return false
     }
+    if (f.updFrom || f.updTo) {
+      const u = updatedMs(r)
+      if (!u) return false // no update time: outside any date range
+      if (f.updFrom && u < dayStart(f.updFrom)) return false
+      if (f.updTo && u > dayStart(f.updTo) + 86400000 - 1) return false
+    }
     if (tags.size && !r.tags.some((x) => tags.has(x))) return false
     if (f.type !== '*' && (r.types || []).indexOf(f.type) < 0) return false
     if (f.pub === 'live' && !r.live) return false
@@ -124,7 +138,7 @@ export function shownRows(rows: Row[], f: Filters): Row[] {
   })
 }
 
-export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: true, pub: '*', year: '*', since: '*', world: '*', dateFrom: '', dateTo: '' }
+export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: true, pub: '*', year: '*', since: '*', world: '*', dateFrom: '', dateTo: '', updFrom: '', updTo: '' }
 
 // A day as the date filter reads it: from midnight UTC, the way the server's graph_index reads a bare date.
 export const dayStart = (d: string) => Date.parse(d + 'T00:00:00Z')

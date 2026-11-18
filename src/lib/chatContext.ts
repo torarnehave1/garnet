@@ -56,6 +56,7 @@ function words(v: ViewState) {
     f.year !== '*' ? `Created in: ${f.year}` : '',
     f.since !== '*' ? `Start year: ${f.since}` : '',
     f.dateFrom || f.dateTo ? `Created between: ${f.dateFrom || 'the beginning'} and ${f.dateTo || 'now'}` : '',
+    f.updFrom || f.updTo ? `Last updated between: ${f.updFrom || 'the beginning'} and ${f.updTo || 'now'}` : '',
     count < v.shown.length ? `Time slider: the oldest ${count} of ${v.shown.length}` : '',
   ].filter(Boolean)
   return { count, filters }
@@ -116,6 +117,7 @@ export function viewLine(v: ViewState): string {
     f.year !== '*' ? `created ${f.year}` : '',
     f.since !== '*' ? `from ${f.since}` : '',
     f.dateFrom || f.dateTo ? `created ${f.dateFrom || '…'} – ${f.dateTo || '…'}` : '',
+    f.updFrom || f.updTo ? `updated ${f.updFrom || '…'} – ${f.updTo || '…'}` : '',
     `${words(v).count} graph${words(v).count === 1 ? '' : 's'}`,
     clicked ? `clicked: ${clicked}` : '',
   ]
@@ -125,6 +127,7 @@ export function viewLine(v: ViewState): string {
 
 export function viewContext(v: ViewState): string {
   const { count, filters } = words(v)
+  const f = v.filters
   const sel = v.selected
   const clicked = !sel
     ? 'nothing'
@@ -140,5 +143,11 @@ export function viewContext(v: ViewState): string {
     `Chosen graphs: ${count}. Answer "how many" from this number, without a tool.`,
     `Clicked on the map: ${clicked}.`,
     `To list or read the chosen graphs, call mcp_call with server "vegr", tool_name "graph_index" and exactly these arguments: ${JSON.stringify(indexArgs(v))}. Always add brief:true and limit:40 (a longer answer is cut off before you see it); page on with offset 40, 80, … one call at a time. Add order:"newest" when the question is about the newest or latest graphs. Report only rows you have actually read; never fill in titles or dates you have not seen.`,
-  ].join('\n')
+    // graph_index has no filter for the update time (dev-worker mcp/index-filter.js), so the call above returns more than the chosen set.
+    f.updFrom || f.updTo
+      ? `The "Last updated between" filter is NOT part of those arguments: of the rows the call returns, keep only those whose updatedAt lies from ${f.updFrom || 'the beginning'} to ${f.updTo || 'now'} (whole days, UTC). If a row shows no updatedAt, say that you cannot tell for that row.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }

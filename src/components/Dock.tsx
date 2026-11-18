@@ -89,7 +89,22 @@ export function Dock(p: DockProps) {
             <input id="dto" type="date" value={f.dateTo} min={f.dateFrom || undefined} onChange={(e) => p.onFilter({ dateTo: e.target.value })} />
           </label>
           {(f.dateFrom || f.dateTo) && (
-            <button type="button" className="ghost dateclear" aria-label="Clear the date range" title="Clear the date range" onClick={() => p.onFilter({ dateFrom: '', dateTo: '' })}>
+            <button type="button" className="ghost dateclear" aria-label="Clear the created range" title="Clear the created range" onClick={() => p.onFilter({ dateFrom: '', dateTo: '' })}>
+              ×
+            </button>
+          )}
+        </span>
+        <span className="daterange">
+          <label htmlFor="ufrom">
+            Updated from{' '}
+            <input id="ufrom" type="date" value={f.updFrom} max={f.updTo || undefined} onChange={(e) => p.onFilter({ updFrom: e.target.value })} />
+          </label>{' '}
+          <label htmlFor="uto">
+            to{' '}
+            <input id="uto" type="date" value={f.updTo} min={f.updFrom || undefined} onChange={(e) => p.onFilter({ updTo: e.target.value })} />
+          </label>
+          {(f.updFrom || f.updTo) && (
+            <button type="button" className="ghost dateclear" aria-label="Clear the updated range" title="Clear the updated range" onClick={() => p.onFilter({ updFrom: '', updTo: '' })}>
               ×
             </button>
           )}

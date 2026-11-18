@@ -46,6 +46,8 @@ export interface Filters {
   since: string
   dateFrom: string // created on or after this day (YYYY-MM-DD, UTC), '' for no lower bound
   dateTo: string // created on or before this day, '' for no upper bound
+  updFrom: string // last updated on or after this day (YYYY-MM-DD, UTC), '' for no lower bound
+  updTo: string // last updated on or before this day, '' for no upper bound
   world: string
 }
 
