@@ -6,9 +6,10 @@ import { loadApprovedTypes, RegisteredTypeNode } from '../lib/vegvisrNode'
 
 const VIEW = 'https://editor.vegvisr.org/view?graphId='
 
-// A node shown in the panel at the right by its type's own approved renderer (viewRules.ts), the
-// same picture Knowledge Editor gives. If the renderer cannot be had, the node's text is shown.
-export default function NodePreview({ user, graphId, nodeId, world, title, type, onClose }: { user: User; graphId: string; nodeId: string; world: string; title: string; type: string; onClose: () => void }) {
+// A node shown by its type's own approved renderer, the same picture Knowledge Editor gives: in a
+// panel at the right, or over the whole window (`full`), as the rules graph says (viewRules.ts).
+// A type without an approved renderer is shown with the node's text.
+export default function NodePreview({ user, graphId, nodeId, world, title, type, full = false, onClose }: { user: User; graphId: string; nodeId: string; world: string; title: string; type: string; full?: boolean; onClose: () => void }) {
   const [node, setNode] = useState<KgNode | null>(null)
   const [rendered, setRendered] = useState<boolean | null>(null) // null: not known yet
   const [error, setError] = useState('')
@@ -43,7 +44,7 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
   }, [onClose])
 
   return (
-    <aside className="preview" aria-label={'Node ' + title}>
+    <aside className={'preview' + (full ? ' full' : '')} aria-label={'Node ' + title}>
       <div className="previewHead">
         <strong>{title}</strong>
         <button type="button" className="ghost" aria-label="Close the preview" onClick={onClose}>
@@ -56,7 +57,7 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
         {node && rendered && <RegisteredTypeNode node={node} world={world || null} />}
         {node && rendered === false && (
           <>
-            <p className="previewNote">The view for the node type {type} could not be loaded, so the node’s text is shown.</p>
+            <p className="previewNote">The node type {type} has no approved view to draw it with, so the node’s text is shown.</p>
             {/* textHtml escapes everything it takes from the graph before adding its own tags. */}
             <div className="cardBody" dangerouslySetInnerHTML={{ __html: textHtml(node) }} />
           </>

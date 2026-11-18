@@ -300,6 +300,7 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
    both sides the frame stays see-through, so its dark theme is drawn on the panel, not on white. */
 .preview vegvisr-node { color-scheme: light; }
 .previewFoot { margin: 0; padding: 8px 16px 10px; border-top: 1px solid var(--line); font-size: 13px; }
+.preview.full { top: 8px; right: 8px; bottom: 8px; left: 8px; width: auto; z-index: 50; }
 @media (max-width: 900px) {
   .preview { top: 8px; right: 8px; bottom: 8px; left: 8px; width: auto; }
 }

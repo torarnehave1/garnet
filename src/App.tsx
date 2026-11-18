@@ -10,7 +10,7 @@ import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
 import { Login } from './components/Login'
-import { nodeView } from './lib/viewRules'
+import { applyRules, nodeView, readRules, RULES_GRAPH_ID } from './lib/viewRules'
 import { PulseBar } from './components/PulseBar'
 import { SearchBar, type Found } from './components/SearchBar'
 import { ImpersonationBar, isImpersonating, returnToOwnLogin } from './components/ImpersonationBar'
@@ -242,7 +242,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [diagram, setDiagram] = useState<{ graphId: string; nodeId: string; title: string } | null>(null)
   const closeDiagram = useCallback(() => setDiagram(null), [])
   // The node shown in the panel at the right by its type's own renderer, if any (viewRules.ts).
-  const [preview, setPreview] = useState<{ graphId: string; nodeId: string; world: string; title: string; type: string } | null>(null)
+  const [preview, setPreview] = useState<{ graphId: string; nodeId: string; world: string; title: string; type: string; full: boolean } | null>(null)
   const closePreview = useCallback(() => setPreview(null), [])
   const [, bump] = useState(0)
   const [zoomZ, setZoomZ] = useState(1)
@@ -276,6 +276,22 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const eff = useMemo(() => reconcile(filters, rows, worlds), [filters, rows, worlds])
   const effRef = useRef(eff)
   effRef.current = eff
+  // Where a clicked node of each type opens: read from the rules graph at start and after every
+  // refresh (rows change, and Refresh has emptied the graph cache). Unreadable: the reserve in code.
+  useEffect(() => {
+    let live = true
+    loadGraph(user, RULES_GRAPH_ID)
+      .then((g) => {
+        if (live) applyRules(readRules(g.nodes))
+      })
+      .catch(() => {
+        if (live) applyRules(null)
+      })
+    return () => {
+      live = false
+    }
+  }, [user, rows])
+
   /* ---------- text search of the map ---------- */
   // searchQ is the search that is on; found is the server's answer to it. The map then keeps only
   // the graphs that contain the text, on top of the filters.
@@ -359,9 +375,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         setMenu(null)
         // A clicked diagram node opens in the whole window; a restored view only selects it.
         const view = byUser && d?.kind === 'n' ? nodeView(d.type) : null
-        setDiagram(view === 'full' && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, title: d.label } : null)
-        // A clicked node of a type with its own view opens at the right; any other choice closes it.
-        setPreview(view === 'right' && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, world: d.parent.world, title: d.label, type: d.type } : null)
+        // The whole window: a diagram in the diagram view (zoom and pan), any other type by its renderer.
+        const asDiagram = view === 'full' && d?.kind === 'n' && d.type === 'mermaid-diagram'
+        setDiagram(asDiagram && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, title: d.label } : null)
+        // A clicked node of a type with a rule opens by its own renderer; any other choice closes it.
+        setPreview(view && !asDiagram && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, world: d.parent.world, title: d.label, type: d.type, full: view === 'full' } : null)
       },
       onContext: (g, x, y) => setMenu({ g, x, y }),
       onZoom: setZoomZ,
@@ -807,7 +825,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       )}
       {preview && (
         <Suspense fallback={null}>
-          <NodePreview user={user} graphId={preview.graphId} nodeId={preview.nodeId} world={preview.world} title={preview.title} type={preview.type} onClose={closePreview} />
+          <NodePreview user={user} graphId={preview.graphId} nodeId={preview.nodeId} world={preview.world} title={preview.title} type={preview.type} full={preview.full} onClose={closePreview} />
         </Suspense>
       )}
       {tagOpen && (
