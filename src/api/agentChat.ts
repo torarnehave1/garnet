@@ -21,8 +21,18 @@ export type ChatEvent =
 // Garnet's own rule, carried into the chat: nothing changes without a yes.
 const RULE =
   'Chat beside Garnet, the network map of the person’s knowledge graphs. Reading is free. Before any tool that creates, changes, moves, deletes, publishes or sends anything, say exactly what will change (name the graph) and wait for the person’s yes in a new message.'
+// agent-worker's lock prompt was written for the Cloudflare context: it says graphs and the rest
+// of the toolbox "cannot be called" and that reading a graph is out of scope. Here both go through
+// mcp_call, and a model that believed the prompt sent the person away to another work context
+// (2026-11-18: asked for an OpenAI image as a graph's header). This says what is true here.
+const REACH =
+  'What you can do here: everything the VEGR.AI MCP server offers, through mcp_call with server "vegr". That includes reading, creating and changing graphs and their nodes and metadata, making images (among them generate_image_openai for the OpenAI image model, and generate_node_image, which can also place the image as a node’s header), chat, contacts, e-mail and SMS. Agent-Builder’s own tools (generate_image, patch_node, delegate_to_kg, read_graph and the like) are not loaded here; that is no reason to decline, because the VEGR.AI MCP server has its own tools for the same work. Before you say something cannot be done here, list the tools (mcp_call with only server "vegr") and look for one that fits. Tell the person to choose another work context only when that list has no tool for the job.'
 const CAPABILITIES = [
-  { name: 'mcp_call', summary: 'Every tool of the VEGR.AI MCP server (server "vegr"), as the signed-in person.' },
+  {
+    name: 'mcp_call',
+    summary:
+      'Every tool of the VEGR.AI MCP server (server "vegr"), as the signed-in person: read and change graphs and nodes, make images, chat, contacts, e-mail and SMS.',
+  },
 ]
 
 export async function sendChat(
@@ -49,7 +59,7 @@ export async function sendChat(
       exactModel: true,
       messages,
       graphId: graphId || undefined,
-      workContext: { title: 'VEGR.AI MCP Server', description: RULE + '\n\n' + view, capabilities: CAPABILITIES },
+      workContext: { title: 'VEGR.AI MCP Server', description: RULE + '\n\n' + REACH + '\n\n' + view, capabilities: CAPABILITIES },
     }),
     signal,
   })
