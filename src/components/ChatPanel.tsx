@@ -21,12 +21,14 @@ import {
   toContent,
   record,
   transcribe,
+  TRANSCRIBE_MODEL,
   type Recording,
   uploadImage,
   type Attachment,
 } from '../lib/attachments'
 import { CHAT_MODELS, chatModelName, DEFAULT_CHAT_MODEL } from '../lib/chatModels'
 import { chatMd, inlineMd } from '../lib/inlineMd'
+import { readLang } from '../lib/lang'
 import type { User } from '../lib/types'
 
 // A chat on the left, with any Agent-Builder chat model. Its tools are the VEGR.AI MCP server's,
@@ -249,7 +251,7 @@ export function ChatPanel({
     if (!rec) return setMic('off')
     setMic('busy')
     try {
-      const text = await transcribe(await rec.stop(), '', () => {}, undefined, true)
+      const text = await transcribe(await rec.stop(), readLang(), () => {}, undefined, true)
       if (text) setDraft((d) => (d.trim() ? d.replace(/\s+$/, '') + ' ' : '') + text)
       else setFileErr('No speech found in the recording.')
       box.current?.focus()
@@ -270,7 +272,7 @@ export function ChatPanel({
     setMsgs((ms) => [
       ...ms,
       { role: 'user', text: question, ctx },
-      { role: 'assistant', text: '', model: 'whisper-1', steps: [] },
+      { role: 'assistant', text: '', model: TRANSCRIBE_MODEL, steps: [] },
     ])
     setBusy(true)
     const ctl = new AbortController()
@@ -288,7 +290,7 @@ export function ChatPanel({
         text: answer,
         steps: [{ callId: 'audio', name: 'transcribe', ok: true, summary: '' }],
       }))
-      saving.current = keep(question, answer, 'whisper-1', ctx)
+      saving.current = keep(question, answer, TRANSCRIBE_MODEL, ctx)
     } catch (err) {
       patchLast((m) => ({
         ...m,

@@ -5,13 +5,19 @@ import type { User } from './types'
 //          as an image block plus its address, so it can also go into a graph node
 //   pdf    sent as a document block (only Claude models read it; the others get its name)
 //   text   .txt .md .csv .json .xml .html .css .js .ts .vcf, put into the message as text
-//   audio  not an attachment: transcribed with Whisper (openai-worker /audio) in 2-minute pieces,
-//          and the transcript becomes part of the chat
+//   audio  not an attachment: transcribed with gpt-transcribe (openai-worker /audio) in 2-minute
+//          pieces, and the transcript becomes part of the chat
 //   mic    spoken into the microphone (record), transcribed the same way, and put in the message box
+//
+// whisper-1 shuts down 26 Feb 2027; gpt-transcribe replaced it here on 18 Nov 2026. openai-worker
+// turns `language` into the model's `languages[]` and keeps the answer's `text` as before.
 
 const AGENT_API = 'https://agent.vegvisr.org'
 const AUDIO_ENDPOINT = 'https://openai.vegvisr.org/audio'
 const CHUNK_SECONDS = 120
+export const TRANSCRIBE_MODEL = 'gpt-transcribe'
+// Names and terms the model should spell right. No < > or line breaks (the API refuses the request).
+const KEYWORDS = ['VEGR.AI', 'Vegvisr', 'Garnet', 'Enkel endring', 'AlivenessLAB', 'Claude']
 const MAX_PDF = 20 * 1024 * 1024
 const MAX_TEXT = 1024 * 1024
 
@@ -131,11 +137,12 @@ const clock = (s: number) => {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
-async function whisper(blob: Blob, name: string, language: string, signal?: AbortSignal): Promise<string> {
+async function sendAudio(blob: Blob, name: string, language: string, signal?: AbortSignal): Promise<string> {
   const form = new FormData()
   form.append('file', blob, name)
-  form.append('model', 'whisper-1')
+  form.append('model', TRANSCRIBE_MODEL)
   if (language) form.append('language', language)
+  for (const k of KEYWORDS) form.append('keywords[]', k)
   const r = await fetch(AUDIO_ENDPOINT, { method: 'POST', body: form, signal })
   const t = await r.text()
   let j: { text?: string; error?: string; message?: string } | null = null
@@ -151,7 +158,7 @@ async function whisper(blob: Blob, name: string, language: string, signal?: Abor
 /**
  * Transcribes an audio file. Longer than two minutes (or over 8 MB without a readable length):
  * decoded in the browser and sent in two-minute WAV pieces, each marked with its time.
- * language: '' lets Whisper detect it.
+ * language: '' lets the model detect it; dictation passes the sign-in language (no / en).
  * plain: running text without the time marks (dictation); a piece that fails then stops the whole.
  */
 export async function transcribe(
@@ -165,7 +172,7 @@ export async function transcribe(
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
   if (!Ctx) {
     onStatus('Transcribing…')
-    return whisper(file, file.name, language, signal)
+    return sendAudio(file, file.name, language, signal)
   }
   const ctx = new Ctx()
   try {
@@ -173,13 +180,13 @@ export async function transcribe(
     try {
       buf = await ctx.decodeAudioData(await file.arrayBuffer())
     } catch {
-      buf = null // a format the browser cannot decode: Whisper may still read it whole
+      buf = null // a format the browser cannot decode: the model may still read it whole
     }
     if (!buf || buf.duration <= CHUNK_SECONDS) {
       if (!buf && file.size > 25 * 1024 * 1024)
         throw new Error('The browser cannot read this audio, and it is too large to send whole (25 MB).')
       onStatus('Transcribing…')
-      return whisper(file, file.name, language, signal)
+      return sendAudio(file, file.name, language, signal)
     }
     const per = CHUNK_SECONDS * buf.sampleRate
     const total = Math.ceil(buf.length / per)
@@ -195,7 +202,7 @@ export async function transcribe(
       onStatus(`Transcribing part ${i + 1} of ${total}…`)
       const label = `[${clock(start / buf.sampleRate)} - ${clock(end / buf.sampleRate)}]`
       try {
-        const t = await whisper(wavOf(piece), `${base}_part_${i + 1}.wav`, language, signal)
+        const t = await sendAudio(wavOf(piece), `${base}_part_${i + 1}.wav`, language, signal)
         if (t) parts.push(plain ? t : `${label} ${t}`)
       } catch (err) {
         if (signal?.aborted || plain) throw err
@@ -242,7 +249,7 @@ export async function record(): Promise<Recording> {
         rec.onstop = () => {
           release()
           const type = rec.mimeType || chunks[0]?.type || 'audio/webm'
-          // Whisper goes by the file name: Safari records mp4, the others webm or ogg.
+          // The model goes by the file name: Safari records mp4, the others webm or ogg.
           const ext = /mp4|m4a|aac/.test(type) ? 'm4a' : /ogg/.test(type) ? 'ogg' : 'webm'
           resolve(new File(chunks, `dictation.${ext}`, { type }))
         }
