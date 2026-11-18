@@ -15,6 +15,7 @@ export const RULES_GRAPH_ID = '750e31d1-bf3d-4e29-a019-85a37aec82d7'
 const RESERVE: Record<string, NodeView> = {
   'mermaid-diagram': 'full',
   'sanskrit-ord': 'right',
+  'youtube-video': 'right',
 }
 let rules: Record<string, NodeView> = RESERVE
 

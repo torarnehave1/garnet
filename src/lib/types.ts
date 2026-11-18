@@ -22,6 +22,8 @@ export interface KgNode {
   label?: string
   type?: string
   info?: string
+  // A media node's address (a youtube-video node: the video).
+  path?: string | null
   metadata?: Record<string, unknown> & { status?: unknown }
 }
 export interface KgEdge {

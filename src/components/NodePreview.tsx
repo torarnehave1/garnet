@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
-import { textHtml } from '../lib/graphRules'
+import { textHtml, youtubeId } from '../lib/graphRules'
 import type { KgNode, User } from '../lib/types'
 import { loadApprovedTypes, RegisteredTypeNode } from '../lib/vegvisrNode'
 
@@ -43,6 +43,9 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // A YouTube node has no renderer of its own: the panel plays the video.
+  const video = node && (type === 'youtube-video' || type === 'youtube-live') ? youtubeId(node) : null
+
   return (
     <aside className={'preview' + (full ? ' full' : '')} aria-label={'Node ' + title}>
       <div className="previewHead">
@@ -55,7 +58,22 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
         {error && <p className="previewNote">{error}</p>}
         {!error && !node && <p className="previewNote">Loading the node…</p>}
         {node && rendered && <RegisteredTypeNode node={node} world={world || null} />}
-        {node && rendered === false && (
+        {node && rendered === false && video && (
+          <>
+            {/* The video itself, played here. youtube-nocookie: no cookie is set before play. */}
+            <div className="previewVideo">
+              <iframe
+                src={'https://www.youtube-nocookie.com/embed/' + video}
+                title={title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            </div>
+            <div className="cardBody" dangerouslySetInnerHTML={{ __html: textHtml(node) }} />
+          </>
+        )}
+        {node && rendered === false && !video && (
           <>
             <p className="previewNote">The node type {type} has no approved view to draw it with, so the node’s text is shown.</p>
             {/* textHtml escapes everything it takes from the graph before adding its own tags. */}

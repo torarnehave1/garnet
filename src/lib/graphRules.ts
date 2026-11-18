@@ -10,6 +10,18 @@ export function nodeName(label: unknown): string {
   return t || '(no label)'
 }
 
+// The id of the video a YouTube node plays: from the address in its name
+// (![YOUTUBE src=URL]…), else from its path. null when neither holds a YouTube address.
+export function youtubeId(node: Pick<KgNode, 'label' | 'path'>): string | null {
+  const inName = /!\[YOUTUBE\s+src=([^\]\s]+)/.exec(String(node.label || ''))
+  for (const raw of [inName?.[1], node.path]) {
+    const url = String(raw || '').trim().replace(/^["']|["']$/g, '')
+    const m = /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/.exec(url)
+    if (m) return m[1]
+  }
+  return null
+}
+
 // A flow graph (nodes of type flow-step): the order of its steps, read from the edges.
 // Starts at the node of type "flow", or at the steps nothing points to. [] when not a flow.
 export function flowOrder(ns: KgNode[], es: KgEdge[]): string[] {
