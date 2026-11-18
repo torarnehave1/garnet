@@ -143,6 +143,7 @@ export function textHtml(node: KgNode): string {
   const type = node.type || 'fulltext'
   const info = String(node.info || '')
   if (type === 'html-node' || /^\s*<(!doctype|html)/i.test(info)) return '<p>This node is a web page. Open the graph to see it.</p>'
+  if (type === 'mermaid-diagram') return '<p>This node is a diagram.</p>'
   let h = ''
   if (!info.trim()) h += '<p>This node has no text.</p>'
   const cut = info.length > 2400

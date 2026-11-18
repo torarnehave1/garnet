@@ -21,6 +21,7 @@ import { PULSE_MODES, type PulseMode } from './lib/pulse'
 import { usePulse } from './lib/usePulse'
 // React Flow is loaded only when a flow is opened.
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
+const DiagramModal = lazy(() => import('./components/DiagramModal'))
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
 import {
   DEFAULT_FILTERS,
@@ -234,6 +235,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [nodeNote, setNodeNote] = useState('')
   const [snap, setSnap] = useState<Snapshot>(EMPTY)
   const [selected, setSelected] = useState<Item | null>(null)
+  // The mermaid-diagram node shown in the whole window, if any.
+  const [diagram, setDiagram] = useState<{ graphId: string; nodeId: string; title: string } | null>(null)
+  const closeDiagram = useCallback(() => setDiagram(null), [])
   const [, bump] = useState(0)
   const [zoomZ, setZoomZ] = useState(1)
   const [sw, setSw] = useState({ rate: true, meta: true, sem: true })
@@ -282,10 +286,12 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   useEffect(() => {
     const e = new Engine(cvRef.current!, {
       onSnapshot: setSnap,
-      onSelect: (d) => {
+      onSelect: (d, byUser) => {
         setSelected(d)
         setFlowClosed(null)
         setMenu(null)
+        // A clicked diagram node opens in the whole window; a restored view only selects it.
+        setDiagram(byUser && d?.kind === 'n' && d.type === 'mermaid-diagram' ? { graphId: d.parent.id, nodeId: d.nid, title: d.label } : null)
       },
       onContext: (g, x, y) => setMenu({ g, x, y }),
       onZoom: setZoomZ,
@@ -719,6 +725,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           />
         </Suspense>
       )}
+      {diagram && (
+        <Suspense fallback={null}>
+          <DiagramModal user={user} graphId={diagram.graphId} nodeId={diagram.nodeId} title={diagram.title} onClose={closeDiagram} />
+        </Suspense>
+      )}
       {tagOpen && (
         <TagPanel
           counts={tags}
@@ -734,7 +745,15 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
 
       <div className="bottom">
         <div className="above">
-          <Card item={selected} user={user} N={snap.N} skeleton={snap.skeleton} scopeAll={scope === 'all'} onClose={() => engine?.select(null)} />
+          <Card
+            item={selected}
+            user={user}
+            N={snap.N}
+            skeleton={snap.skeleton}
+            scopeAll={scope === 'all'}
+            onClose={() => engine?.select(null)}
+            onDiagram={(n) => setDiagram({ graphId: n.parent.id, nodeId: n.nid, title: n.label })}
+          />
           <div className="switches">
             <div className="switch static">Zoom {zoomZ < 10 ? zoomZ.toFixed(1) : Math.round(zoomZ)}×</div>
             <label className="switch">

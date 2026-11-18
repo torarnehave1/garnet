@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
-import type { Item } from '../engine/Engine'
+import type { Item, NodeItem } from '../engine/Engine'
 import { textHtml } from '../lib/graphRules'
 import { dayOf, SHARED } from '../lib/rows'
 import type { User } from '../lib/types'
@@ -29,7 +29,7 @@ function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; 
   return <div className="cardBody" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-export function Card({ item, user, N, skeleton, scopeAll, onClose }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void }) {
+export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
   if (!item) return null
   let title = ''
   let meta = ''
@@ -64,6 +64,13 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose }: { item: Ite
       <h2>{title}</h2>
       <p>{meta}</p>
       {body}
+      {item.kind === 'n' && item.type === 'mermaid-diagram' && (
+        <p>
+          <button type="button" className="ghost" onClick={() => onDiagram(item)}>
+            Show the diagram
+          </button>
+        </p>
+      )}
       {link && (
         <p>
           <a href={link.href} target="_blank" rel="noopener">

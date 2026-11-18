@@ -269,3 +269,17 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .mictext { min-width: 0; max-height: 120px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; line-height: 1.45; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .micinterim { color: var(--muted); }
 .micnote { font-style: normal; font-size: 12px; color: var(--danger); }
+
+/* ---------- a diagram node in the whole window ---------- */
+.diagram { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: #0b1220; }
+.diagramHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.diagramHead strong { font-family: var(--display); font-size: 17px; overflow-wrap: anywhere; min-width: 0; flex: 1 1 160px; }
+.diagramTools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.diagramTools button { min-width: 40px; min-height: 36px; }
+.diagramPct { min-width: 48px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+.diagramStage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; color: #1b2433; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.diagramStage:active { cursor: grabbing; }
+.diagramSheet { position: absolute; inset: 12px; transform-origin: center center; display: flex; align-items: center; justify-content: center; }
+.diagramSheet svg { width: 100% !important; height: 100% !important; max-width: none !important; }
+.diagramNote { position: absolute; inset: 0; margin: 0; padding: 20px; overflow: auto; color: #1b2433; }
+.diagramNote pre { white-space: pre-wrap; font-size: 12px; color: #4a5568; }

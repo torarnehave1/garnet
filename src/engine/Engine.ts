@@ -101,7 +101,8 @@ export interface Focus {
 
 export interface EngineEvents {
   onSnapshot(s: Snapshot): void
-  onSelect(d: Item | null): void
+  // byUser: the item was clicked, not put back by a restored view.
+  onSelect(d: Item | null, byUser?: boolean): void
   onContext(g: GraphItem, clientX: number, clientY: number): void
   onZoom(z: number): void
   onFocus(f: Focus): void
@@ -618,7 +619,7 @@ export class Engine {
   }
 
   /* ---------- selection ---------- */
-  select(d: Item | null) {
+  select(d: Item | null, byUser = false) {
     this.selected = d
     this.near = null
     if (d) {
@@ -636,7 +637,7 @@ export class Engine {
       }
       this.near = near
     }
-    this.ev.onSelect(d)
+    this.ev.onSelect(d, byUser)
   }
   // A tap pushes the neighbours outwards a little; the simulation lets them settle back.
   private nudge(d: Item | null) {
@@ -690,7 +691,7 @@ export class Engine {
         return
       }
       const d = this.pick(e.clientX, e.clientY)
-      this.select(d)
+      this.select(d, true)
       this.nudge(d)
     })
     on('contextmenu', (e) => {
