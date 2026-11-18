@@ -163,6 +163,11 @@ export class Engine {
   setPulse(counts: Map<string, number>) {
     this.pulse = counts
   }
+  // The nodes a text search found, by graph id: ringed on the map. null: no search is on.
+  private found: Map<string, Set<string>> | null = null
+  setFound(found: Map<string, Set<string>> | null) {
+    this.found = found
+  }
   // Each changed graph's current version number, for the Version mode. Filled in like the counts.
   private pulseVersions: Map<string, number> = new Map()
   setPulseVersions(versions: Map<string, number>) {
@@ -883,6 +888,18 @@ export class Engine {
         ctx.fill()
       }
       this.drawTypeIcons(kk)
+      // A ring round each node that holds the searched text.
+      if (this.found) {
+        ctx.strokeStyle = '#ffd166'
+        ctx.lineWidth = 1.6 / T.k
+        for (const d of this.inner) {
+          if (d.order >= kk || !this.found.get(d.parent.id)?.has(d.nid)) continue
+          ctx.globalAlpha = this.isNear(d) ? 1 : 0.15
+          ctx.beginPath()
+          ctx.arc(d.x, d.y, d.r * (d.flow ? 1.45 : 1) + 2.2 / T.k, 0, 6.2832)
+          ctx.stroke()
+        }
+      }
     }
     // With the pulse layer on, graphs without a change in the week step back. Not in Version
     // mode: there every graph carries its version number, changed in the week or not.

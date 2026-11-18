@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearUser, completeMagicLink, isSuperadmin, magicInUrl, readUser } from './api/auth'
-import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, moveGraphToWorld, renameGraph, restoreGraph } from './api/kg'
+import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, moveGraphToWorld, renameGraph, restoreGraph, searchText } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { BulkTag } from './components/BulkTag'
@@ -11,6 +11,7 @@ import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
 import { Login } from './components/Login'
 import { PulseBar } from './components/PulseBar'
+import { SearchBar, type Found } from './components/SearchBar'
 import { ImpersonationBar, isImpersonating, returnToOwnLogin } from './components/ImpersonationBar'
 import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
@@ -270,9 +271,70 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const eff = useMemo(() => reconcile(filters, rows, worlds), [filters, rows, worlds])
   const effRef = useRef(eff)
   effRef.current = eff
+  /* ---------- text search of the map ---------- */
+  // searchQ is the search that is on; found is the server's answer to it. The map then keeps only
+  // the graphs that contain the text, on top of the filters.
+  const [searchQ, setSearchQ] = useState('')
+  const [found, setFound] = useState<Found | null>(null)
+  const [searchBusy, setSearchBusy] = useState(false)
+  const [searchErr, setSearchErr] = useState('')
+  const foundRef = useRef(found)
+  foundRef.current = found
+  // The graphs the map shows: the filters' graphs, and of those the ones a search found.
+  const shownFor = (rs: Row[], f: Filters): Row[] => {
+    const base = shownRows(rs, f)
+    const fd = foundRef.current
+    return fd ? base.filter((r) => fd.ids.has(r.id)) : base
+  }
+  // The search field is offered once meta areas are chosen (architect 2026-11-18): it searches the
+  // graphs on the map, and with nothing chosen that is the whole collection.
+  const canSearch = eff.tags.length > 0
+  useEffect(() => {
+    if (!canSearch && searchQ) setSearchQ('')
+  }, [canSearch, searchQ])
+  // The graphs to search: what the filters show. A changed map is searched again.
+  const searchIds = useMemo(() => (searchQ ? shownRows(rows, eff).map((r) => r.id).join(',') : ''), [searchQ, rows, eff])
+  useEffect(() => {
+    setSearchErr('')
+    if (!searchQ) {
+      setFound(null)
+      setSearchBusy(false)
+      return
+    }
+    const ids = searchIds ? searchIds.split(',') : []
+    if (!ids.length) {
+      setFound({ q: searchQ, ids: new Set(), nodes: new Map(), of: 0, partial: false, suggestions: [], suggestionNote: null })
+      setSearchBusy(false)
+      return
+    }
+    let stale = false
+    setSearchBusy(true)
+    searchText(user, scope, searchQ, ids)
+      .then((a) => {
+        if (stale) return
+        const nodes = new Map<string, Set<string>>()
+        for (const m of a.matched) nodes.set(m.graphId, new Set(m.nodeIds))
+        setFound({ q: a.query, ids: new Set(a.matched.map((m) => m.graphId)), nodes, of: ids.length, partial: a.partial, suggestions: a.suggestions || [], suggestionNote: a.suggestionNote ?? null })
+        setSearchBusy(false)
+      })
+      .catch((e) => {
+        if (stale) return
+        setFound(null)
+        setSearchBusy(false)
+        setSearchErr('The search did not go through: ' + ((e as Error)?.message || 'unknown error'))
+      })
+    return () => {
+      stale = true
+    }
+  }, [searchQ, searchIds, user, scope])
+  useEffect(() => {
+    engine?.setFound(found ? found.nodes : null)
+  }, [engine, found])
+
   // The graphs the map draws now, for the pulse layer (the drawing effect below works out its own).
   const pulseOn = pulseMode !== 'off'
-  const shownNow = useMemo(() => (pulseOn ? shownRows(rows, eff) : NO_ROWS), [pulseOn, rows, eff])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- shownFor reads found through a ref
+  const shownNow = useMemo(() => (pulseOn ? shownFor(rows, eff) : NO_ROWS), [pulseOn, rows, eff, found])
   const rowsRef = useRef(rows)
   rowsRef.current = rows
   const userRef = useRef(user)
@@ -373,7 +435,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     const mine = ++renderToken.current
     const ty = f.type === '*' ? '' : f.type
     setNodeNote('')
-    const shown = shownRows(rows, f)
+    const shown = shownFor(rows, f)
     engine.build(shown, null, f.type, f.only, !loaded)
     const wantNodes = !!(shown.length && (f.tags.length || ty))
     placeRestore(engine, restoreWant, shown, !wantNodes)
@@ -424,11 +486,13 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             'Showing the graphs only.',
         )
       })
-  }, [engine, rows, loaded, effKey])
+  }, [engine, rows, loaded, effKey, found])
 
   /* ---------- a chat question's view, set back on the map ---------- */
   function restoreView(st: MapState) {
     engine?.pause()
+    // A view to go back to has no text search in it; one that is on would hide graphs of that view.
+    if (searchQ) setSearchQ('')
     const next: Filters = { ...DEFAULT_FILTERS, ...st.filters, find: '' }
     const same = st.scope === scope && JSON.stringify({ ...next, find: '' }) === effKey
     restoreWant.current = st
@@ -634,6 +698,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       <div className="head">
         <Brand />
         <div className="stat">{stat}</div>
+        {canSearch && (
+          <SearchBar active={searchQ} busy={searchBusy} found={found} error={searchErr} onSearch={setSearchQ} onClear={() => setSearchQ('')} />
+        )}
         {sw.rate && <RateChart engine={engine} snap={snap} />}
         <PulseBar mode={pulseMode} sum={pulse} onShow={showGraph} />
         {note && (
@@ -683,7 +750,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       {bulkOpen && (
         <BulkTag
           user={user}
-          rows={shownRows(rows, eff)}
+          rows={shownFor(rows, eff)}
           tags={tags.map((t) => t[0])}
           why={why}
           onClose={() => setBulkOpen(false)}
@@ -703,7 +770,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           hidden={chat !== 'open'}
           graph={flowGraph ? { id: flowGraph.id, title: flowGraph.title } : null}
           view={() => {
-            const v = { scope, filters: eff, shown: shownRows(rows, eff), kk: snap.kk, selected }
+            const v = { scope, filters: eff, shown: shownFor(rows, eff), kk: snap.kk, selected }
             return { text: viewContext(v), line: viewLine(v), state: mapState(v) }
           }}
           onRestore={restoreView}

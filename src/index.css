@@ -40,6 +40,24 @@ h1 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 3.4vw
 .pulseTop { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
 .pulseTop .ghost { font-size: 12px; padding: 2px 9px; text-align: left; }
 .switch select { padding: 1px 4px; }
+/* The text search of the map (SearchBar). On a wide screen it sits at the top centre; on a
+   narrower one it follows the title and the count, where there is room for it. */
+.mapsearch { position: relative; z-index: 7; margin-top: 8px; pointer-events: auto; }
+.mapsearchRow { display: flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px 4px 3px 14px; }
+.mapsearchRow:focus-within { border-color: var(--accent); }
+.mapsearchRow input, .mapsearchRow input:focus, .mapsearchRow input:focus-visible { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 16px; color: var(--ink); background: transparent; border: 0; outline: none; box-shadow: none; padding: 5px 0; border-radius: 0; }
+.mapsearchRow input::-webkit-search-cancel-button { display: none; }
+.mapsearchRow .ghost { min-width: 0; padding: 2px 10px; font-size: 16px; }
+.mapsearchNote { margin-top: 4px; padding: 0 14px; font-size: 12px; color: var(--muted); text-shadow: 0 0 6px var(--bg), 0 0 6px var(--bg); }
+.mapsearchNote:empty { display: none; }
+.mapsearchNote b { color: var(--ink); font-weight: 600; }
+.mapsearchNote .ghost { font-size: 12px; padding: 1px 8px; min-width: 0; }
+.mapsearchErr { color: var(--danger); }
+@media (min-width: 1100px) {
+  .mapsearch { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 6; width: 380px; margin-top: 0; }
+  .mapsearchNote { text-align: center; }
+  #root.chatside .mapsearch { left: calc(50% + var(--side) / 2); }
+}
 
 .authbar { position: absolute; top: 14px; right: 16px; z-index: 6; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 4px 4px 12px; }
 .impersonating { display: flex; align-items: center; gap: 10px; color: #1a1205; background: #e3a008; border-radius: 999px; padding: 4px 4px 4px 12px; font-size: 13px; max-width: 100%; }

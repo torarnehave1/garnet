@@ -54,6 +54,20 @@ export async function loadIndex(user: User, scope: Scope): Promise<{ rows: Row[]
   return { rows: (a.graphs || []).filter((g) => g && g.graphId).map(toRow), worlds: Array.isArray(a.worlds) ? a.worlds.map(String) : [] }
 }
 
+// Which of the named graphs contain the text, and in which nodes (search_text, dev-worker 1ea30de).
+// A whole word, or * for part of one; the server reads every text field of every searched node type.
+export interface TextSearch {
+  query: string
+  total: number
+  partial: boolean
+  suggestions: string[]
+  suggestionNote: string | null
+  matched: { graphId: string; inTitle: boolean; nodeIds: string[] }[]
+}
+export function searchText(user: User, scope: Scope, query: string, graphIds: string[]): Promise<TextSearch> {
+  return mcpCall<TextSearch>(user, 'search_text', { query, scope, graphIds })
+}
+
 // Move a graph into a World's own storage (Superadmin only; the server checks). Id and links stay.
 export async function moveGraphToWorld(user: User, id: string, world: string): Promise<string> {
   const a = await mcpCall<{ world?: string }>(user, 'move_graph_to_world', { graphId: id, world })
