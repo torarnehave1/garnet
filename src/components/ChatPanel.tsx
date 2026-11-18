@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { sendChat, type ChatTurn } from '../api/agentChat'
 import {
   addMessage,
@@ -29,6 +29,7 @@ import {
 import { CHAT_MODELS, chatModelName, DEFAULT_CHAT_MODEL } from '../lib/chatModels'
 import { chatMd, inlineMd } from '../lib/inlineMd'
 import { readLang } from '../lib/lang'
+import { MicBar } from './MicBar'
 import type { User } from '../lib/types'
 
 // A chat on the left, with any Agent-Builder chat model. Its tools are the VEGR.AI MCP server's,
@@ -127,6 +128,8 @@ export function ChatPanel({
   const audioIn = useRef<HTMLInputElement>(null)
   const recording = useRef<Recording | null>(null)
   const [mic, setMic] = useState<'off' | 'on' | 'busy'>('off') // off · recording · transcribing
+  const micAbort = useRef<AbortController | null>(null)
+  const micLevel = useCallback(() => recording.current?.level() ?? 0, [])
 
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight })
@@ -135,7 +138,10 @@ export function ChatPanel({
     if (!hidden) box.current?.focus()
   }, [hidden])
   useEffect(() => () => abort.current?.abort(), [])
-  useEffect(() => () => recording.current?.cancel(), [])
+  useEffect(() => () => {
+    recording.current?.cancel()
+    micAbort.current?.abort()
+  }, [])
 
   function pickModel(id: string) {
     setModel(id)
@@ -232,34 +238,48 @@ export function ChatPanel({
     }
   }
 
-  // Mic: the first press starts recording, the next one stops it. What was said lands in the
-  // message box after what is already there; nothing is sent before the person presses Send.
+  // Mic: a press starts recording and the message box gives way to the listening bar (MicBar):
+  // ✓ (or Enter) puts what was said in the message box after what is already there, ✕ (or Escape)
+  // throws it away. Nothing is sent before the person presses Send.
   async function dictate() {
     setFileErr('')
-    if (mic === 'busy') return
-    if (mic === 'off') {
-      try {
-        recording.current = await record()
-        setMic('on')
-      } catch (err) {
-        setFileErr(err instanceof Error ? err.message : String(err))
-      }
-      return
+    if (mic !== 'off') return
+    try {
+      recording.current = await record()
+      setMic('on')
+    } catch (err) {
+      setFileErr(err instanceof Error ? err.message : String(err))
     }
+  }
+
+  async function acceptMic() {
     const rec = recording.current
     recording.current = null
     if (!rec) return setMic('off')
     setMic('busy')
+    const ctl = new AbortController()
+    micAbort.current = ctl
     try {
-      const text = await transcribe(await rec.stop(), readLang(), () => {}, undefined, true)
+      const text = await transcribe(await rec.stop(), readLang(), () => {}, ctl.signal, true)
+      if (ctl.signal.aborted) return
       if (text) setDraft((d) => (d.trim() ? d.replace(/\s+$/, '') + ' ' : '') + text)
-      else setFileErr('No speech found in the recording.')
-      box.current?.focus()
+      else setFileErr(readLang() === 'no' ? 'Fant ingen tale i opptaket.' : 'No speech found in the recording.')
     } catch (err) {
-      setFileErr(err instanceof Error ? err.message : String(err))
+      if (!ctl.signal.aborted) setFileErr(err instanceof Error ? err.message : String(err))
     } finally {
+      if (micAbort.current === ctl) micAbort.current = null
       setMic('off')
+      setTimeout(() => box.current?.focus(), 0)
     }
+  }
+
+  function cancelMic() {
+    recording.current?.cancel()
+    recording.current = null
+    micAbort.current?.abort()
+    micAbort.current = null
+    setMic('off')
+    setTimeout(() => box.current?.focus(), 0)
   }
 
   // An audio file becomes a transcript in the chat, which later questions can use.
@@ -551,27 +571,31 @@ export function ChatPanel({
           </div>
         )}
         {fileErr && <div className="cerr">{fileErr}</div>}
-        <textarea
-          ref={box}
-          rows={3}
-          value={draft}
-          placeholder="Message…"
-          aria-label="Message"
-          onChange={(e) => setDraft(e.target.value)}
-          onPaste={(e) => {
-            const imgs = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
-            if (imgs.length) {
-              e.preventDefault()
-              void attach(imgs)
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              send()
-            }
-          }}
-        />
+        {mic !== 'off' ? (
+          <MicBar state={mic} lang={readLang()} level={micLevel} onCancel={cancelMic} onAccept={() => void acceptMic()} />
+        ) : (
+          <textarea
+            ref={box}
+            rows={3}
+            value={draft}
+            placeholder="Message…"
+            aria-label="Message"
+            onChange={(e) => setDraft(e.target.value)}
+            onPaste={(e) => {
+              const imgs = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
+              if (imgs.length) {
+                e.preventDefault()
+                void attach(imgs)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                send()
+              }
+            }}
+          />
+        )}
         <div className="chatactions">
           <button
             type="button"
@@ -604,12 +628,12 @@ export function ChatPanel({
             <button
               type="button"
               className={'ghost' + (mic === 'on' ? ' rec' : '')}
-              disabled={mic === 'busy'}
+              disabled={mic !== 'off'}
               onClick={() => void dictate()}
               aria-pressed={mic === 'on'}
-              title={mic === 'on' ? 'Stop and put what you said in the message box' : 'Speak your message instead of typing it'}
+              title="Speak your message instead of typing it"
             >
-              {mic === 'on' ? 'Stop mic' : mic === 'busy' ? 'Transcribing…' : 'Mic'}
+              Mic
             </button>
           )}
           {busy ? (

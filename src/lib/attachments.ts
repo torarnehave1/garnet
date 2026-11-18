@@ -225,6 +225,8 @@ export interface Recording {
   stop: () => Promise<File>
   /** Ends the recording and throws it away. */
   cancel: () => void
+  /** How loud the microphone is right now, 0–1 (for the waveform). 0 when the browser gives no meter. */
+  level: () => number
 }
 
 /** Starts recording from the microphone (the browser asks the person first). */
@@ -241,9 +243,38 @@ export async function record(): Promise<Recording> {
   rec.ondataavailable = (e) => {
     if (e.data.size) chunks.push(e.data)
   }
-  const release = () => stream.getTracks().forEach((t) => t.stop())
+  // A level meter beside the recorder. Created inside the press (record is called from the click),
+  // which is what lets iOS Safari start it; without a meter the recording still works.
+  let meter: { ctx: AudioContext; an: AnalyserNode; buf: Uint8Array<ArrayBuffer> } | null = null
+  try {
+    const Ctx =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (Ctx) {
+      const ctx = new Ctx()
+      const an = ctx.createAnalyser()
+      an.fftSize = 512
+      ctx.createMediaStreamSource(stream).connect(an)
+      void ctx.resume().catch(() => {})
+      meter = { ctx, an, buf: new Uint8Array(new ArrayBuffer(an.fftSize)) }
+    }
+  } catch {
+    meter = null
+  }
+  const release = () => {
+    stream.getTracks().forEach((t) => t.stop())
+    void meter?.ctx.close().catch(() => {})
+    meter = null
+  }
   rec.start()
   return {
+    level: () => {
+      if (!meter) return 0
+      meter.an.getByteTimeDomainData(meter.buf)
+      let sum = 0
+      for (const v of meter.buf) sum += (v - 128) * (v - 128)
+      const rms = Math.sqrt(sum / meter.buf.length) / 128 // 0–1, speech is mostly 0.02–0.3
+      return Math.min(1, rms * 4)
+    },
     stop: () =>
       new Promise<File>((resolve, reject) => {
         rec.onstop = () => {
