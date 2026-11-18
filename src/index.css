@@ -289,6 +289,20 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .micnote { font-style: normal; font-size: 12px; color: var(--danger); }
 
 /* ---------- a diagram node in the whole window ---------- */
+/* A node shown by its type's own renderer, at the right (NodePreview). The whole screen when narrow. */
+.preview { position: fixed; top: 64px; right: 16px; bottom: 16px; z-index: 40; width: min(460px, 42vw); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); overflow: hidden; }
+.previewHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); }
+.previewHead strong { font-family: var(--display); font-size: 17px; overflow-wrap: anywhere; min-width: 0; }
+.previewHead .ghost { min-width: 0; padding: 2px 10px; font-size: 16px; flex: none; }
+.previewBody { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 14px; -webkit-overflow-scrolling: touch; }
+.previewNote { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+/* Garnet is a dark page; the renderer's frame is a plain document. With the same colour scheme on
+   both sides the frame stays see-through, so its dark theme is drawn on the panel, not on white. */
+.preview vegvisr-node { color-scheme: light; }
+.previewFoot { margin: 0; padding: 8px 16px 10px; border-top: 1px solid var(--line); font-size: 13px; }
+@media (max-width: 900px) {
+  .preview { top: 8px; right: 8px; bottom: 8px; left: 8px; width: auto; }
+}
 .diagram { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: #0b1220; }
 .diagramHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .diagramHead strong { font-family: var(--display); font-size: 17px; overflow-wrap: anywhere; min-width: 0; flex: 1 1 160px; }

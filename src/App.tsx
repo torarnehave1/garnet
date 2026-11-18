@@ -10,6 +10,7 @@ import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
 import { Login } from './components/Login'
+import { nodeView } from './lib/viewRules'
 import { PulseBar } from './components/PulseBar'
 import { SearchBar, type Found } from './components/SearchBar'
 import { ImpersonationBar, isImpersonating, returnToOwnLogin } from './components/ImpersonationBar'
@@ -23,6 +24,7 @@ import { usePulse } from './lib/usePulse'
 // React Flow is loaded only when a flow is opened.
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 const DiagramModal = lazy(() => import('./components/DiagramModal'))
+const NodePreview = lazy(() => import('./components/NodePreview'))
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
 import {
   DEFAULT_FILTERS,
@@ -239,6 +241,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   // The mermaid-diagram node shown in the whole window, if any.
   const [diagram, setDiagram] = useState<{ graphId: string; nodeId: string; title: string } | null>(null)
   const closeDiagram = useCallback(() => setDiagram(null), [])
+  // The node shown in the panel at the right by its type's own renderer, if any (viewRules.ts).
+  const [preview, setPreview] = useState<{ graphId: string; nodeId: string; world: string; title: string; type: string } | null>(null)
+  const closePreview = useCallback(() => setPreview(null), [])
   const [, bump] = useState(0)
   const [zoomZ, setZoomZ] = useState(1)
   const [sw, setSw] = useState({ rate: true, meta: true, sem: true })
@@ -353,7 +358,10 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         setFlowClosed(null)
         setMenu(null)
         // A clicked diagram node opens in the whole window; a restored view only selects it.
-        setDiagram(byUser && d?.kind === 'n' && d.type === 'mermaid-diagram' ? { graphId: d.parent.id, nodeId: d.nid, title: d.label } : null)
+        const view = byUser && d?.kind === 'n' ? nodeView(d.type) : null
+        setDiagram(view === 'full' && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, title: d.label } : null)
+        // A clicked node of a type with its own view opens at the right; any other choice closes it.
+        setPreview(view === 'right' && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, world: d.parent.world, title: d.label, type: d.type } : null)
       },
       onContext: (g, x, y) => setMenu({ g, x, y }),
       onZoom: setZoomZ,
@@ -795,6 +803,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       {diagram && (
         <Suspense fallback={null}>
           <DiagramModal user={user} graphId={diagram.graphId} nodeId={diagram.nodeId} title={diagram.title} onClose={closeDiagram} />
+        </Suspense>
+      )}
+      {preview && (
+        <Suspense fallback={null}>
+          <NodePreview user={user} graphId={preview.graphId} nodeId={preview.nodeId} world={preview.world} title={preview.title} type={preview.type} onClose={closePreview} />
         </Suspense>
       )}
       {tagOpen && (
