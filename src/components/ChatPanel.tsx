@@ -12,13 +12,16 @@ import {
 } from '../api/chatHistory'
 import {
   AUDIO_ACCEPT,
+  canRecord,
   describe,
   FILE_ACCEPT,
   IMAGE_ACCEPT,
   isClaude,
   readFile,
   toContent,
+  record,
   transcribe,
+  type Recording,
   uploadImage,
   type Attachment,
 } from '../lib/attachments'
@@ -30,7 +33,8 @@ import type { User } from '../lib/types'
 // as the signed-in person (agentChat.ts). The selected graph is passed along as "this graph".
 // Each question and its answer are kept in Agent-Builder's chat history, marked "garnet"
 // (chatHistory.ts); History reopens an earlier chat. Images, PDFs and text files go with a message;
-// an audio file is transcribed into the chat (attachments.ts).
+// an audio file is transcribed into the chat (attachments.ts). Mic takes what is said into the
+// message box, to read over before it is sent.
 interface Step {
   callId: string
   name: string
@@ -119,6 +123,8 @@ export function ChatPanel({
   const imageIn = useRef<HTMLInputElement>(null)
   const fileIn = useRef<HTMLInputElement>(null)
   const audioIn = useRef<HTMLInputElement>(null)
+  const recording = useRef<Recording | null>(null)
+  const [mic, setMic] = useState<'off' | 'on' | 'busy'>('off') // off · recording · transcribing
 
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight })
@@ -127,6 +133,7 @@ export function ChatPanel({
     if (!hidden) box.current?.focus()
   }, [hidden])
   useEffect(() => () => abort.current?.abort(), [])
+  useEffect(() => () => recording.current?.cancel(), [])
 
   function pickModel(id: string) {
     setModel(id)
@@ -220,6 +227,36 @@ export function ChatPanel({
       } finally {
         if (image) setUploading((n) => n - 1)
       }
+    }
+  }
+
+  // Mic: the first press starts recording, the next one stops it. What was said lands in the
+  // message box after what is already there; nothing is sent before the person presses Send.
+  async function dictate() {
+    setFileErr('')
+    if (mic === 'busy') return
+    if (mic === 'off') {
+      try {
+        recording.current = await record()
+        setMic('on')
+      } catch (err) {
+        setFileErr(err instanceof Error ? err.message : String(err))
+      }
+      return
+    }
+    const rec = recording.current
+    recording.current = null
+    if (!rec) return setMic('off')
+    setMic('busy')
+    try {
+      const text = await transcribe(await rec.stop(), '', () => {}, undefined, true)
+      if (text) setDraft((d) => (d.trim() ? d.replace(/\s+$/, '') + ' ' : '') + text)
+      else setFileErr('No speech found in the recording.')
+      box.current?.focus()
+    } catch (err) {
+      setFileErr(err instanceof Error ? err.message : String(err))
+    } finally {
+      setMic('off')
     }
   }
 
@@ -561,6 +598,18 @@ export function ChatPanel({
           >
             Audio
           </button>
+          {canRecord() && (
+            <button
+              type="button"
+              className={'ghost' + (mic === 'on' ? ' rec' : '')}
+              disabled={mic === 'busy'}
+              onClick={() => void dictate()}
+              aria-pressed={mic === 'on'}
+              title={mic === 'on' ? 'Stop and put what you said in the message box' : 'Speak your message instead of typing it'}
+            >
+              {mic === 'on' ? 'Stop mic' : mic === 'busy' ? 'Transcribing…' : 'Mic'}
+            </button>
+          )}
           {busy ? (
             <button type="button" onClick={() => abort.current?.abort()}>
               Stop

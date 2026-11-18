@@ -197,6 +197,9 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .chatactions { display: flex; gap: 6px; align-items: center; }
 .chatactions button[type='submit'], .chatactions > button:last-child { margin-left: auto; }
 .chatactions .ghost { font-size: 12px; padding: 3px 8px; }
+.chatactions .ghost.rec { color: var(--danger); border-color: var(--danger); animation: recpulse 1.2s ease-in-out infinite; }
+@keyframes recpulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .chatactions .ghost.rec { animation: none; } }
 .cchips { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .cchips li { position: relative; display: flex; align-items: center; gap: 2px; font-size: 12px; }
 .cchips img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block; }

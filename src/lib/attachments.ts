@@ -7,6 +7,7 @@ import type { User } from './types'
 //   text   .txt .md .csv .json .xml .html .css .js .ts .vcf, put into the message as text
 //   audio  not an attachment: transcribed with Whisper (openai-worker /audio) in 2-minute pieces,
 //          and the transcript becomes part of the chat
+//   mic    spoken into the microphone (record), transcribed the same way, and put in the message box
 
 const AGENT_API = 'https://agent.vegvisr.org'
 const AUDIO_ENDPOINT = 'https://openai.vegvisr.org/audio'
@@ -151,12 +152,14 @@ async function whisper(blob: Blob, name: string, language: string, signal?: Abor
  * Transcribes an audio file. Longer than two minutes (or over 8 MB without a readable length):
  * decoded in the browser and sent in two-minute WAV pieces, each marked with its time.
  * language: '' lets Whisper detect it.
+ * plain: running text without the time marks (dictation); a piece that fails then stops the whole.
  */
 export async function transcribe(
   file: File,
   language: string,
   onStatus: (s: string) => void,
   signal?: AbortSignal,
+  plain = false,
 ): Promise<string> {
   const Ctx =
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -193,14 +196,67 @@ export async function transcribe(
       const label = `[${clock(start / buf.sampleRate)} - ${clock(end / buf.sampleRate)}]`
       try {
         const t = await whisper(wavOf(piece), `${base}_part_${i + 1}.wav`, language, signal)
-        if (t) parts.push(`${label} ${t}`)
+        if (t) parts.push(plain ? t : `${label} ${t}`)
       } catch (err) {
-        if (signal?.aborted) throw err
+        if (signal?.aborted || plain) throw err
         parts.push(`${label} [Error: ${err instanceof Error ? err.message : String(err)}]`)
       }
     }
-    return parts.join('\n\n')
+    return parts.join(plain ? ' ' : '\n\n')
   } finally {
     await ctx.close().catch(() => {})
+  }
+}
+
+// ── Microphone ───────────────────────────────────────────────────────────
+
+export const canRecord = () =>
+  typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
+
+export interface Recording {
+  /** Ends the recording, lets go of the microphone and gives what was said as a file. */
+  stop: () => Promise<File>
+  /** Ends the recording and throws it away. */
+  cancel: () => void
+}
+
+/** Starts recording from the microphone (the browser asks the person first). */
+export async function record(): Promise<Recording> {
+  if (!canRecord()) throw new Error('This browser cannot record from the microphone.')
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  } catch {
+    throw new Error('No access to the microphone. Allow it for this page in the browser and try again.')
+  }
+  const rec = new MediaRecorder(stream)
+  const chunks: Blob[] = []
+  rec.ondataavailable = (e) => {
+    if (e.data.size) chunks.push(e.data)
+  }
+  const release = () => stream.getTracks().forEach((t) => t.stop())
+  rec.start()
+  return {
+    stop: () =>
+      new Promise<File>((resolve, reject) => {
+        rec.onstop = () => {
+          release()
+          const type = rec.mimeType || chunks[0]?.type || 'audio/webm'
+          // Whisper goes by the file name: Safari records mp4, the others webm or ogg.
+          const ext = /mp4|m4a|aac/.test(type) ? 'm4a' : /ogg/.test(type) ? 'ogg' : 'webm'
+          resolve(new File(chunks, `dictation.${ext}`, { type }))
+        }
+        rec.onerror = () => {
+          release()
+          reject(new Error('The recording failed.'))
+        }
+        if (rec.state === 'inactive') rec.onstop?.(new Event('stop'))
+        else rec.stop()
+      }),
+    cancel: () => {
+      rec.onstop = null
+      if (rec.state !== 'inactive') rec.stop()
+      release()
+    },
   }
 }
