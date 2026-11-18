@@ -3,7 +3,7 @@ import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
 import { courseOrder, flowOrder, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
-import { beat, PULSE_PLAIN, pulseColor, pulseText, type PulseMode } from '../lib/pulse'
+import { beat, PULSE_PLAIN, pulseColor, pulseText, ripples, rippleSpan, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import type { KgGraph, Row } from '../lib/types'
 import { SEED } from './seed'
@@ -969,6 +969,10 @@ export class Engine {
       if (d.order >= kk) continue
       const n = this.pulse.get(d.id)
       if (!n) continue
+      if (this.pulseMode === 'ripple') {
+        this.drawRipple(d, n, now)
+        continue
+      }
       // Reduced motion: the beat is not animated, so the colour carries the count instead.
       const color = this.pulseMode === 'color' || (this.pulseMode === 'beat' && this.reduced) ? pulseColor(n) : PULSE_PLAIN
       const e = beating ? beat(now, n, (hash(d.id) % 1000) / 1000) : 1
@@ -982,6 +986,29 @@ export class Engine {
       ctx.fill()
       ctx.globalAlpha = a
       ctx.strokeStyle = color
+      ctx.stroke()
+    }
+  }
+  // Rings in water: n rings travel out from the graph and fade, so 12 changes is twelve rings at once.
+  private drawRipple(d: GraphItem, n: number, now: number) {
+    const { ctx, T } = this
+    const px = 1 / T.k
+    const r0 = this.pulseR(d)
+    const span = rippleSpan(n) * px
+    const near = this.isNear(d) ? 0.95 : 0.12
+    const color = pulseColor(n)
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.5 * px
+    // The graph's own ring stays, so a changed graph is found even between waves.
+    ctx.globalAlpha = near
+    ctx.beginPath()
+    ctx.arc(d.x, d.y, r0, 0, 6.2832)
+    ctx.stroke()
+    for (const p of ripples(now, n, (hash(d.id) % 1000) / 1000, this.reduced)) {
+      const still = this.reduced
+      ctx.globalAlpha = near * (still ? 0.75 - 0.5 * p : (1 - p) * Math.min(1, p * 8))
+      ctx.beginPath()
+      ctx.arc(d.x, d.y, r0 + (still ? (p + 1 / Math.max(1, n)) : p) * span, 0, 6.2832)
       ctx.stroke()
     }
   }

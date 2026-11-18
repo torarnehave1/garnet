@@ -1,4 +1,4 @@
-import { beatsPerMinute, PULSE_CAP, PULSE_DAYS, PULSE_STEPS, pulseText, type PulseMode } from '../lib/pulse'
+import { beatsPerMinute, PULSE_CAP, RIPPLE_SECONDS, PULSE_DAYS, PULSE_STEPS, pulseText, type PulseMode } from '../lib/pulse'
 import type { PulseSummary } from '../lib/usePulse'
 
 // What the pulse layer shows, in words: how many graphs changed in the week and how often, how to
@@ -44,6 +44,12 @@ export function PulseBar({ mode, sum, onShow }: { mode: PulseMode; sum: PulseSum
         <div className="pulseNote">
           A faster beat means more changes: 1 beats about {Math.round(beatsPerMinute(1))} times a minute, {PULSE_CAP}+ about{' '}
           {Math.round(beatsPerMinute(PULSE_CAP))}.
+        </div>
+      )}
+      {sum.changed > 0 && mode === 'ripple' && (
+        <div className="pulseNote">
+          One ring for each change, sent out like ripples in water: 2 is a small stir, 12 a wide wave. Each ring takes{' '}
+          {RIPPLE_SECONDS} seconds to fade. Colour as in Colour.
         </div>
       )}
       {sum.top.length > 0 && (

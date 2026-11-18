@@ -6,12 +6,13 @@ export const PULSE_DAYS = 7
 // The store keeps the 20 newest versions of a graph, so 20 means "20 or more".
 export const PULSE_CAP = 20
 
-export type PulseMode = 'off' | 'color' | 'count' | 'beat'
+export type PulseMode = 'off' | 'color' | 'count' | 'beat' | 'ripple'
 export const PULSE_MODES: { value: PulseMode; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'color', label: 'Colour' },
   { value: 'count', label: 'Count' },
   { value: 'beat', label: 'Beat' },
+  { value: 'ripple', label: 'Ripple' },
 ]
 
 // One hue (rose), darkest for one change and lightest for the most: on the night-water background
@@ -62,4 +63,22 @@ export function beat(now: number, n: number, phase: number): number {
   const a = (p - 0.1) / 0.055
   const b = (p - 0.34) / 0.07
   return Math.min(1, Math.exp(-a * a) + 0.55 * Math.exp(-b * b))
+}
+
+// Ripple (architect's ask 2026-11-18): rings in water. A graph with n changes sends out n rings at
+// a time, like a radar; 2 is a small stir, 12 a wide wave train. Each ring takes RIPPLE_SECONDS to
+// travel out and fades as it goes. The span grows with n so the rings stay apart to count.
+export const RIPPLE_SECONDS = 4
+/** How far out (screen px) the outermost ring travels for n changes. */
+export const rippleSpan = (n: number) => 8 + 4.5 * Math.min(PULSE_CAP, Math.max(1, n))
+/**
+ * Where each of the n rings is on its way out, 0 (at the graph) to 1 (gone), at time `now` (ms).
+ * still: reduced motion, the rings stand evenly spaced instead of moving.
+ */
+export function ripples(now: number, n: number, phase: number, still: boolean): number[] {
+  const k = Math.min(PULSE_CAP, Math.max(1, n))
+  const t = still ? 0 : now / (RIPPLE_SECONDS * 1000) + phase
+  const out: number[] = []
+  for (let i = 0; i < k; i++) out.push((((t + i / k) % 1) + 1) % 1)
+  return out
 }
