@@ -31,6 +31,8 @@ export function usePulse(engine: Engine | null, user: User, shown: Row[], mode: 
   const [sum, setSum] = useState<PulseSummary | null>(null)
   // The counts from the last reading, so a changed filter redraws with the numbers already known.
   const known = useRef(new Map<string, number>())
+  // The version numbers read so far, by graph and its "updated" time, kept across filter changes.
+  const knownV = useRef(new Map<string, { updated: string; v: number }>())
 
   useEffect(() => {
     engine?.setPulseMode(mode)
@@ -40,6 +42,7 @@ export function usePulse(engine: Engine | null, user: User, shown: Row[], mode: 
     if (!engine) return
     if (!on) {
       engine.setPulse(new Map())
+      engine.setPulseVersions(new Map())
       return
     }
     const since = pulseSince(Date.now())
@@ -52,6 +55,12 @@ export function usePulse(engine: Engine | null, user: User, shown: Row[], mode: 
     for (const r of changed) counts.set(r.id, known.current.get(r.id) || 1)
     known.current = counts
     engine.setPulse(counts)
+    const versions = new Map<string, number>()
+    for (const r of changed) {
+      const k = knownV.current.get(r.id)
+      if (k && k.updated === r.updated) versions.set(r.id, k.v)
+    }
+    engine.setPulseVersions(versions)
     const todo = changed.slice(0, MOST)
     let read = 0
     let failed = 0
@@ -76,10 +85,14 @@ export function usePulse(engine: Engine | null, user: User, shown: Row[], mode: 
       while (!stopped && next < todo.length) {
         const r = todo[next++]
         try {
-          const stamps = await loadHistory(user, r.id, r.updated)
+          const h = await loadHistory(user, r.id, r.updated)
           if (stopped) return
-          const n = changesSince(stamps, since)
+          const n = changesSince(h.stamps, since)
           counts.set(r.id, n)
+          if (h.version != null) {
+            versions.set(r.id, h.version)
+            knownV.current.set(r.id, { updated: r.updated, v: h.version })
+          }
           if (n >= PULSE_CAP) capped++
         } catch {
           failed++

@@ -1,6 +1,7 @@
 // The pulse of the week: how many saved versions each graph got in the last PULSE_DAYS days.
-// A test layer (architect's ask 2026-11-18) with three ways of showing the same number, so they
-// can be compared on the map: a colour scale, the number itself, and a beat that goes faster.
+// A test layer (architect's ask 2026-11-18) with several ways of showing it, so they can be
+// compared on the map: a colour scale, a beat that goes faster, rings in water, and the graph's
+// version number (which replaced the plain count, architect's ask 2026-11-18).
 
 export const PULSE_DAYS = 7
 // The store keeps the 20 newest versions of a graph, so 20 means "20 or more".
@@ -10,7 +11,8 @@ export type PulseMode = 'off' | 'color' | 'count' | 'beat' | 'ripple'
 export const PULSE_MODES: { value: PulseMode; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'color', label: 'Colour' },
-  { value: 'count', label: 'Count' },
+  // Stored as 'count' (the earlier name), so a remembered choice still opens this mode.
+  { value: 'count', label: 'Version' },
   { value: 'beat', label: 'Beat' },
   { value: 'ripple', label: 'Ripple' },
 ]
@@ -33,6 +35,8 @@ export function pulseColor(n: number): string {
   return c
 }
 export const pulseText = (n: number) => (n >= PULSE_CAP ? PULSE_CAP + '+' : String(n))
+// The label in Version mode: the graph's current version number.
+export const versionText = (v: number) => 'V. ' + v
 
 // A stored time in ms. The history writes "YYYY-MM-DD HH:MM:SS" in UTC; rows carry ISO times.
 export function utcMs(s: string | null | undefined): number {

@@ -67,7 +67,7 @@ function placeRestore(engine: Engine, want: { current: MapState | null }, shown:
 /* ---------- what is kept in this browser ---------- */
 const VIEW_KEY = 'garnet-view-v1'
 const SCOPE_KEY = 'garnet-scope'
-// The pulse layer's last choice (off, colour, count or beat), remembered in this browser.
+// The pulse layer's last choice (off, colour, version, beat or ripple), remembered in this browser.
 const PULSE_KEY = 'garnet-pulse'
 const NO_ROWS: Row[] = []
 function readPulseMode(): PulseMode {

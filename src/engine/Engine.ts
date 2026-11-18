@@ -3,7 +3,7 @@ import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
 import { courseOrder, flowOrder, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
-import { beat, PULSE_PLAIN, pulseColor, pulseText, ripples, rippleSpan, type PulseMode } from '../lib/pulse'
+import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, versionText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
 import type { KgGraph, Row } from '../lib/types'
@@ -162,6 +162,11 @@ export class Engine {
   // The same map may be filled in afterwards: it is read again on every frame.
   setPulse(counts: Map<string, number>) {
     this.pulse = counts
+  }
+  // Each changed graph's current version number, for the Version mode. Filled in like the counts.
+  private pulseVersions: Map<string, number> = new Map()
+  setPulseVersions(versions: Map<string, number>) {
+    this.pulseVersions = versions
   }
 
   selected: Item | null = null
@@ -1059,12 +1064,15 @@ export class Engine {
       if (d.order >= kk) continue
       const n = this.pulse.get(d.id)
       if (!n || (n < least && d !== this.selected)) continue
+      // The label is the graph's version number; it appears when the history has been read.
+      const v = this.pulseVersions.get(d.id)
+      if (v == null) continue
       const rr = this.pulseR(d)
       const x = d.x + rr * 0.8
       const y = d.y - rr * 0.8
       ctx.globalAlpha = this.isNear(d) ? 1 : 0.12
-      ctx.strokeText(pulseText(n), x, y)
-      ctx.fillText(pulseText(n), x, y)
+      ctx.strokeText(versionText(v), x, y)
+      ctx.fillText(versionText(v), x, y)
     }
     ctx.textAlign = 'center'
   }
