@@ -27,14 +27,14 @@ import {
   uploadImage,
   type Attachment,
 } from '../lib/attachments'
-import { CHAT_MODELS, chatModelName, DEFAULT_CHAT_MODEL } from '../lib/chatModels'
+import { chatModelName, DEFAULT_CHAT_MODEL } from '../lib/chatModels'
 import { chatMd, inlineMd } from '../lib/inlineMd'
 import { readLang } from '../lib/lang'
 import { canLive, startLive, type LiveSession } from '../lib/live'
 import { MicBar } from './MicBar'
 import type { User } from '../lib/types'
 
-// A chat on the left, with any Agent-Builder chat model. Its tools are the VEGR.AI MCP server's,
+// A chat on the left. The model is not chosen here. Its tools are the VEGR.AI MCP server's,
 // as the signed-in person (agentChat.ts). The selected graph is passed along as "this graph".
 // Each question and its answer are kept in Agent-Builder's chat history, marked "garnet"
 // (chatHistory.ts); History reopens an earlier chat. Images, PDFs and text files go with a message;
@@ -76,15 +76,10 @@ function touchedGraphs(writeArgs: Record<string, unknown>[], answer: string): st
   return [...new Set(ids)].slice(0, 3)
 }
 
-const MODEL_KEY = 'garnet-chat-model-v1'
-function readModel() {
-  try {
-    const m = localStorage.getItem(MODEL_KEY)
-    return m && CHAT_MODELS.some((c) => c.id === m) ? m : DEFAULT_CHAT_MODEL
-  } catch {
-    return DEFAULT_CHAT_MODEL
-  }
-}
+// Garnet does not choose the model (architect's decision 2026-11-18): the chat always asks for
+// the default, and which model answers is decided on the server side. An earlier pick kept in
+// this browser ('garnet-chat-model-v1') is no longer read.
+const model = DEFAULT_CHAT_MODEL
 
 export function ChatPanel({
   user,
@@ -110,7 +105,6 @@ export function ChatPanel({
   shownCount: number
 }) {
   const context = `Sees the ${shownCount} graphs on the map` + (graph ? ` · selected: ${graph.title}` : '')
-  const [model, setModel] = useState(readModel)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -148,15 +142,6 @@ export function ChatPanel({
     liveSession.current?.cancel()
     micAbort.current?.abort()
   }, [])
-
-  function pickModel(id: string) {
-    setModel(id)
-    try {
-      localStorage.setItem(MODEL_KEY, id)
-    } catch {
-      /* storage blocked */
-    }
-  }
 
   function newChat() {
     setMsgs([])
@@ -495,17 +480,6 @@ export function ChatPanel({
         </button>
       </div>
       <div className="chatbar">
-        <select aria-label="Model" value={model} onChange={(e) => pickModel(e.target.value)} disabled={busy}>
-          {['Anthropic', 'OpenAI', 'Grok', 'Gemini', 'Kimi'].map((g) => (
-            <optgroup key={g} label={g}>
-              {CHAT_MODELS.filter((m) => m.group === g).map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
         <button className="ghost" type="button" disabled={busy} onClick={openHistory} aria-expanded={!!sessions}>
           History
         </button>

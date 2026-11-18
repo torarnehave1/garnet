@@ -1,3 +1,5 @@
+// Garnet has no model picker (2026-11-18): the chat always sends DEFAULT_CHAT_MODEL. The list is
+// kept to give the name of the model that answered, also on messages from earlier chats.
 // The chat models Agent-Builder offers that agent.vegvisr.org/chat can run (Agent-Builder
 // src/components/ModelSettings.tsx MODELS). Left out: Workers AI (@cf/…, only on Agent-Builder's
 // WebSocket agent), Ollama (runs in the browser against a local server) and the image models.
