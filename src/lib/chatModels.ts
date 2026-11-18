@@ -1,4 +1,4 @@
-// Garnet has no model picker (2026-11-18): the chat always sends DEFAULT_CHAT_MODEL. The list is
+// Garnet has no model picker (2026-11-18): the chat always sends DEFAULT_CHAT_MODEL (Opus 5.5). The list is
 // kept to give the name of the model that answered, also on messages from earlier chats.
 // The chat models Agent-Builder offers that agent.vegvisr.org/chat can run (Agent-Builder
 // src/components/ModelSettings.tsx MODELS). Left out: Workers AI (@cf/…, only on Agent-Builder's
@@ -27,5 +27,7 @@ export const CHAT_MODELS: ChatModel[] = [
   { id: 'kimi/kimi-k3.1-pro', name: 'Kimi K3.1 Pro', group: 'Kimi' },
 ]
 
-export const DEFAULT_CHAT_MODEL = 'auto'
+// The model Garnet asks for (architect's decision 2026-11-18). Agent-worker uses it as a ceiling:
+// a message it labels simple is answered by Haiku 5.5, a complex one by Opus 5.5.
+export const DEFAULT_CHAT_MODEL = 'claude-opus-5-5'
 export const chatModelName = (id: string) => CHAT_MODELS.find((m) => m.id === id)?.name || id

@@ -77,7 +77,8 @@ function touchedGraphs(writeArgs: Record<string, unknown>[], answer: string): st
 }
 
 // Garnet does not choose the model (architect's decision 2026-11-18): the chat always asks for
-// the default, and which model answers is decided on the server side. An earlier pick kept in
+// Opus 5.5 as the strongest it may use, and the server side picks Haiku 5.5 or Opus 5.5 for each
+// message. An earlier pick kept in
 // this browser ('garnet-chat-model-v1') is no longer read.
 const model = DEFAULT_CHAT_MODEL
 

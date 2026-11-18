@@ -54,9 +54,8 @@ export async function sendChat(
       userId: user.email,
       authToken: user.token,
       model,
-      // The picked model answers; without this agent-worker treats a Claude pick as a ceiling and
-      // may answer with Haiku 5.5. "Auto" still chooses per message.
-      exactModel: true,
+      // No exactModel: agent-worker then treats the model as a ceiling and chooses per message,
+      // Haiku 5.5 for a simple message and this model for a complex one (model-router.js).
       messages,
       graphId: graphId || undefined,
       workContext: { title: 'VEGR.AI MCP Server', description: RULE + '\n\n' + REACH + '\n\n' + view, capabilities: CAPABILITIES },
