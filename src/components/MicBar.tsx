@@ -77,6 +77,9 @@ export function MicBar({ state, lang, text, note, level, onCancel, onAccept }: P
     if (w) w.scrollTop = w.scrollHeight // keep the newest words in sight
   }, [text])
 
+  // With words, the text gets the whole width and the waveform with ✕ ✓ goes on a line under it.
+  const hasText = !!text && !!(text.final || text.interim)
+
   const label = listening
     ? lang === 'no' ? 'Lytter…' : 'Listening…'
     : lang === 'no' ? 'Skriver ned…' : 'Transcribing…'
@@ -84,7 +87,7 @@ export function MicBar({ state, lang, text, note, level, onCancel, onAccept }: P
   return (
     <div
       ref={bar}
-      className={'micbar' + (listening ? '' : ' busy')}
+      className={'micbar' + (listening ? '' : ' busy') + (hasText ? ' hastext' : '')}
       tabIndex={-1}
       role="group"
       aria-label={label}
@@ -98,7 +101,7 @@ export function MicBar({ state, lang, text, note, level, onCancel, onAccept }: P
         }
       }}
     >
-      {text && (text.final || text.interim) ? (
+      {hasText ? (
         <span ref={words} className="mictext" aria-live="polite">
           {text.final}
           {text.final && text.interim ? ' ' : ''}
@@ -111,6 +114,7 @@ export function MicBar({ state, lang, text, note, level, onCancel, onAccept }: P
           {note && <span className="micnote"> · {note}</span>}
         </span>
       )}
+      <div className="microw">
       <canvas ref={canvas} className="micwave" aria-hidden="true" />
       <button
         type="button"
@@ -135,6 +139,7 @@ export function MicBar({ state, lang, text, note, level, onCancel, onAccept }: P
           <path d="M3 8.5l3.2 3.2L13 4.8" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+      </div>
     </div>
   )
 }
