@@ -250,6 +250,12 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [flowClosed, setFlowClosed] = useState<string | null>(null)
   // The chat on the left. Once opened it stays mounted, so closing it keeps the conversation.
   const [chat, setChat] = useState<'never' | 'open' | 'closed'>('never')
+  // An open chat sits beside the map, not over it: the map, the head and the dock move right (index.css .chatside).
+  useEffect(() => {
+    const root = document.getElementById('root')
+    root?.classList.toggle('chatside', chat === 'open')
+    return () => root?.classList.remove('chatside')
+  }, [chat])
   const flowGraph = selected?.kind === 'g' ? selected : selected?.kind === 'n' ? selected.parent : null
   const flowOf =
     flowGraph && isFlowGraph(flowGraph.types) && flowClosed !== flowGraph.id

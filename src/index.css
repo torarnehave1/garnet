@@ -176,6 +176,13 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 /* The chat on the left (ChatPanel): any Agent-Builder chat model, with the VEGR.AI MCP tools. */
 .chatpanel { position: absolute; top: 16px; left: 16px; bottom: 16px; width: min(400px, calc(100% - 32px)); z-index: 7; display: flex; flex-direction: column; background: #101a2c; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .chatpanel[hidden] { display: none; }
+/* Wide enough: the open chat pushes the map, the head and the dock aside so the date and filter line stays in view.
+   Narrow screens keep the chat over the map: there is no room beside it. */
+@media (min-width: 760px) {
+  #root.chatside { --side: calc(min(400px, 100vw - 32px) + 16px); }
+  #root.chatside canvas.net { left: var(--side); width: calc(100% - var(--side)); }
+  #root.chatside .head, #root.chatside .bottom { left: calc(16px + var(--side)); }
+}
 .chatpanel .x { background: transparent; color: var(--muted); min-width: 0; padding: 2px 8px; font-size: 16px; }
 .chatbar { display: flex; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); }
 .chatbar select { flex: 1 1 auto; max-width: none; min-width: 0; }

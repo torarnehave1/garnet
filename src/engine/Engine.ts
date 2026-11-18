@@ -727,6 +727,12 @@ export class Engine {
     const onResize = () => this.resize()
     window.addEventListener('resize', onResize)
     this.cleanup.push(() => window.removeEventListener('resize', onResize))
+    // The canvas also changes size without the window: the chat panel pushes it aside.
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(onResize)
+      ro.observe(cv)
+      this.cleanup.push(() => ro.disconnect())
+    }
   }
 
   /* ---------- drawing ---------- */
