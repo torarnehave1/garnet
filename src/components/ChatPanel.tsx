@@ -632,8 +632,12 @@ export function ChatPanel({
               onClick={() => void dictate()}
               aria-pressed={mic === 'on'}
               title="Speak your message instead of typing it"
+              aria-label="Mic"
             >
-              Mic
+              <svg className="micicon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
             </button>
           )}
           {busy ? (

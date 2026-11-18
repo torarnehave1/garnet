@@ -253,3 +253,5 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .chatform .micbar button.micbtn { align-self: center; display: grid; place-items: center; width: 30px; height: 30px; min-width: 0; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
 .chatform .micbar button.micbtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .chatform .micbar button.micbtn:disabled { opacity: 0.4; cursor: default; }
+.chatactions .ghost:has(.micicon) { display: inline-flex; align-items: center; justify-content: center; padding: 4.5px 10px; }
+.micicon { display: block; }
