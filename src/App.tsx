@@ -10,12 +10,15 @@ import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
 import { Login } from './components/Login'
+import { PulseBar } from './components/PulseBar'
 import { ImpersonationBar, isImpersonating, returnToOwnLogin } from './components/ImpersonationBar'
 import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
 import { TagPanel } from './components/TagPanel'
 import { isFlowGraph } from './lib/flow'
 import { kOf, mapState, viewContext, viewLine, type MapState } from './lib/chatContext'
+import { PULSE_MODES, type PulseMode } from './lib/pulse'
+import { usePulse } from './lib/usePulse'
 // React Flow is loaded only when a flow is opened.
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
@@ -63,6 +66,18 @@ function placeRestore(engine: Engine, want: { current: MapState | null }, shown:
 /* ---------- what is kept in this browser ---------- */
 const VIEW_KEY = 'garnet-view-v1'
 const SCOPE_KEY = 'garnet-scope'
+// The pulse layer's last choice (off, colour, count or beat), remembered in this browser.
+const PULSE_KEY = 'garnet-pulse'
+const NO_ROWS: Row[] = []
+function readPulseMode(): PulseMode {
+  try {
+    const v = localStorage.getItem(PULSE_KEY)
+    if (PULSE_MODES.some((m) => m.value === v)) return v as PulseMode
+  } catch {
+    /* storage blocked */
+  }
+  return 'off'
+}
 
 interface SavedView {
   f: Partial<Filters>
@@ -222,6 +237,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [, bump] = useState(0)
   const [zoomZ, setZoomZ] = useState(1)
   const [sw, setSw] = useState({ rate: true, meta: true, sem: true })
+  const [pulseMode, setPulseMode] = useState<PulseMode>(readPulseMode)
   const [speed, setSpeed] = useState('8')
   const [from, setFrom] = useState('0')
   const [tagOpen, setTagOpen] = useState(false)
@@ -244,6 +260,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const eff = useMemo(() => reconcile(filters, rows, worlds), [filters, rows, worlds])
   const effRef = useRef(eff)
   effRef.current = eff
+  // The graphs the map draws now, for the pulse layer (the drawing effect below works out its own).
+  const pulseOn = pulseMode !== 'off'
+  const shownNow = useMemo(() => (pulseOn ? shownRows(rows, eff) : NO_ROWS), [pulseOn, rows, eff])
   const rowsRef = useRef(rows)
   rowsRef.current = rows
   const userRef = useRef(user)
@@ -279,6 +298,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   useEffect(() => {
     if (engine) engine.speed = +speed || 8
   }, [engine, speed])
+  const pulse = usePulse(engine, user, shownNow, pulseMode)
 
   /* ---------- reading the graphs ---------- */
   const loadToken = useRef(0)
@@ -603,6 +623,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         <Brand />
         <div className="stat">{stat}</div>
         {sw.rate && <RateChart engine={engine} snap={snap} />}
+        <PulseBar mode={pulseMode} sum={pulse} onShow={showGraph} />
         {note && (
           <div className="note">
             <span>{note}</span>{' '}
@@ -718,6 +739,27 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             </label>
             <label className="switch">
               <input type="checkbox" checked={sw.sem} onChange={(e) => setSw({ ...sw, sem: e.target.checked })} /> Semantic links
+            </label>
+            <label className="switch" title="Rings on the graphs changed in the last 7 days, by how many saved changes each got">
+              Pulse
+              <select
+                value={pulseMode}
+                onChange={(e) => {
+                  const m = e.target.value as PulseMode
+                  try {
+                    localStorage.setItem(PULSE_KEY, m)
+                  } catch {
+                    /* storage blocked */
+                  }
+                  setPulseMode(m)
+                }}
+              >
+                {PULSE_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </div>

@@ -30,6 +30,16 @@ h1 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 3.4vw
 .rateText { font-size: 12px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
 .rateText .g { color: #f2b45a; }
 .rateText .n { color: #6fd3c7; }
+/* The pulse layer in words: totals, how to read the rings, the most changed graphs. */
+.pulse { margin-top: 8px; background: rgba(16, 26, 44, 0.78); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: auto; }
+.pulseHead b { color: var(--ink); font-weight: 600; }
+.pulseKey { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+.pulseStep { display: inline-flex; align-items: center; gap: 5px; }
+.pulseStep i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; display: block; }
+.pulseNote { margin-top: 5px; }
+.pulseTop { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.pulseTop .ghost { font-size: 12px; padding: 2px 9px; text-align: left; }
+.switch select { padding: 1px 4px; }
 
 .authbar { position: absolute; top: 14px; right: 16px; z-index: 6; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 4px 4px 12px; }
 .impersonating { display: flex; align-items: center; gap: 10px; color: #1a1205; background: #e3a008; border-radius: 999px; padding: 4px 4px 4px 12px; font-size: 13px; max-width: 100%; }

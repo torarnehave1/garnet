@@ -1,4 +1,5 @@
 import type { KgGraph, Row, Scope, User } from '../lib/types'
+import { utcMs } from '../lib/pulse'
 import { parseTags } from '../lib/rows'
 import { mcpCall } from './mcp'
 
@@ -93,6 +94,25 @@ export function loadGraph(user: User, id: string): Promise<KgGraph> {
     graphCache.set(id, p)
   }
   return p
+}
+
+// When each saved version of a graph was written (ms, newest first). The store keeps the 20
+// newest. Kept for as long as the graph's own "updated" time stays the same, so a refresh reads
+// again only the graphs that changed since. Not cleared by clearCaches for that reason.
+const historyCache = new Map<string, { updated: string; stamps: Promise<number[]> }>()
+export function loadHistory(user: User, id: string, updated: string): Promise<number[]> {
+  // Per person: what one login may read is not shown to the next one in the same browser.
+  const key = user.email + '|' + id
+  const had = historyCache.get(key)
+  if (had && had.updated === updated) return had.stamps
+  const stamps = mcpCall<{ versions?: { version: number; timestamp: string | null }[] }>(user, 'get_graph_history', { graphId: id }).then((h) =>
+    (h.versions || []).map((v) => utcMs(v.timestamp)).filter((t) => t > 0),
+  )
+  stamps.catch(() => {
+    if (historyCache.get(key)?.stamps === stamps) historyCache.delete(key)
+  })
+  historyCache.set(key, { updated, stamps })
+  return stamps
 }
 
 export function clearCaches() {

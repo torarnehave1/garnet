@@ -3,6 +3,7 @@ import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
 import { courseOrder, flowOrder, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
+import { beat, PULSE_PLAIN, pulseColor, pulseText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import type { KgGraph, Row } from '../lib/types'
 import { SEED } from './seed'
@@ -148,6 +149,16 @@ export class Engine {
   speed = 8
   showMeta = true
   showSem = true
+  // The pulse layer: saved changes in the last week per graph id (lib/pulse.ts), and how it is shown.
+  pulseMode: PulseMode = 'off'
+  pulse: Map<string, number> = new Map()
+  setPulseMode(mode: PulseMode) {
+    this.pulseMode = mode
+  }
+  // The same map may be filled in afterwards: it is read again on every frame.
+  setPulse(counts: Map<string, number>) {
+    this.pulse = counts
+  }
 
   selected: Item | null = null
   private near: Set<Item> | null = null
@@ -857,11 +868,13 @@ export class Engine {
         ctx.fill()
       }
     }
+    // With the pulse layer on, graphs without a change in the week step back.
+    const pulseOn = this.pulseMode !== 'off' && !this.skeleton && this.pulse.size > 0
     for (const d of this.graphs) {
       if (d.order >= kk) continue
       const age = kk - d.order
       const fresh = this.playing && age < 14
-      ctx.globalAlpha = this.isNear(d) ? 0.95 : 0.12
+      ctx.globalAlpha = (this.isNear(d) ? 0.95 : 0.12) * (pulseOn && !this.pulse.has(d.id) ? 0.35 : 1)
       ctx.fillStyle = fresh ? '#ffffff' : d.color
       const r = d.r + (fresh ? (14 - age) * 0.35 : 0)
       if (d.image) {
@@ -878,6 +891,7 @@ export class Engine {
       ctx.arc(d.x, d.y, r, 0, 6.2832)
       ctx.fill()
     }
+    if (pulseOn) this.drawPulse(kk, now)
     this.hubs.forEach((d, i) => {
       if (!d.vis) return
       const r = this.hubR(d, false)
@@ -931,7 +945,63 @@ export class Engine {
         if (todo.length) this.spreadLabels(todo, kk)
       }
     }
+    if (pulseOn && this.pulseMode === 'count') this.drawPulseCounts(kk)
     ctx.globalAlpha = 1
+  }
+  // How far out from a graph's centre its pulse ring stands. A course is a square: the ring goes round its corners.
+  private pulseR(d: GraphItem) {
+    return (d.image ? d.r * 1.42 : d.r) + 2.5 / this.T.k
+  }
+  // A ring round every graph that was changed in the week. Colour: the ring's colour is the count.
+  // Count: one colour, the number is written beside it. Beat: one colour, a faster beat for more.
+  private drawPulse(kk: number, now: number) {
+    const { ctx, T } = this
+    const px = 1 / T.k
+    const beating = this.pulseMode === 'beat' && !this.reduced
+    ctx.lineWidth = 2 * px
+    for (const d of this.graphs) {
+      if (d.order >= kk) continue
+      const n = this.pulse.get(d.id)
+      if (!n) continue
+      // Reduced motion: the beat is not animated, so the colour carries the count instead.
+      const color = this.pulseMode === 'color' || (this.pulseMode === 'beat' && this.reduced) ? pulseColor(n) : PULSE_PLAIN
+      const e = beating ? beat(now, n, (hash(d.id) % 1000) / 1000) : 1
+      const a = (this.isNear(d) ? 0.95 : 0.12) * (beating ? 0.3 + 0.7 * e : 1)
+      const rr = this.pulseR(d) + (beating ? e * 5 * px : 0)
+      ctx.beginPath()
+      ctx.arc(d.x, d.y, rr, 0, 6.2832)
+      // A soft fill so the ring is found from far out, then the ring itself.
+      ctx.globalAlpha = a * 0.18
+      ctx.fillStyle = color
+      ctx.fill()
+      ctx.globalAlpha = a
+      ctx.strokeStyle = color
+      ctx.stroke()
+    }
+  }
+  // The number of changes beside each ring. Far out only the busiest graphs are numbered.
+  private drawPulseCounts(kk: number) {
+    const { ctx, T } = this
+    const least = T.k < 0.7 ? 10 : T.k < 1.2 ? 5 : T.k < 2.2 ? 2 : 1
+    const size = this.fs(10)
+    ctx.font = '600 ' + size + "px 'IBM Plex Sans',system-ui,sans-serif"
+    ctx.textAlign = 'left'
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = 3 / T.k
+    ctx.strokeStyle = '#0b1220'
+    ctx.fillStyle = '#e8eef7'
+    for (const d of this.graphs) {
+      if (d.order >= kk) continue
+      const n = this.pulse.get(d.id)
+      if (!n || (n < least && d !== this.selected)) continue
+      const rr = this.pulseR(d)
+      const x = d.x + rr * 0.8
+      const y = d.y - rr * 0.8
+      ctx.globalAlpha = this.isNear(d) ? 1 : 0.12
+      ctx.strokeText(pulseText(n), x, y)
+      ctx.fillText(pulseText(n), x, y)
+    }
+    ctx.textAlign = 'center'
   }
   private flowText(d: NodeItem) {
     const lab = d.label.length > 44 ? d.label.slice(0, 43) + '…' : d.label
