@@ -884,13 +884,14 @@ export class Engine {
       }
       this.drawTypeIcons(kk)
     }
-    // With the pulse layer on, graphs without a change in the week step back.
+    // With the pulse layer on, graphs without a change in the week step back. Not in Version
+    // mode: there every graph carries its version number, changed in the week or not.
     const pulseOn = this.pulseMode !== 'off' && !this.skeleton && this.pulse.size > 0
     for (const d of this.graphs) {
       if (d.order >= kk) continue
       const age = kk - d.order
       const fresh = this.playing && age < 14
-      ctx.globalAlpha = (this.isNear(d) ? 0.95 : 0.12) * (pulseOn && !this.pulse.has(d.id) ? 0.35 : 1)
+      ctx.globalAlpha = (this.isNear(d) ? 0.95 : 0.12) * (pulseOn && this.pulseMode !== 'count' && !this.pulse.has(d.id) ? 0.35 : 1)
       ctx.fillStyle = fresh ? '#ffffff' : d.color
       const r = d.r + (fresh ? (14 - age) * 0.35 : 0)
       if (d.image) {
@@ -961,7 +962,7 @@ export class Engine {
         if (todo.length) this.spreadLabels(todo, kk)
       }
     }
-    if (pulseOn && this.pulseMode === 'count') this.drawPulseCounts(kk)
+    if (this.pulseMode === 'count' && !this.skeleton) this.drawPulseCounts(kk)
     ctx.globalAlpha = 1
   }
   // How far out from a graph's centre its pulse ring stands. A course is a square: the ring goes round its corners.
@@ -1049,10 +1050,12 @@ export class Engine {
       ctx.stroke()
     }
   }
-  // The number of changes beside each ring. Far out only the busiest graphs are numbered.
+  // Version mode: "V. n" beside every graph that has a version number, changed in the week or
+  // not. The number comes with the index (Row.version); for a graph whose history has been read
+  // the history's number is used. Far out only the graphs with the highest numbers are labelled.
   private drawPulseCounts(kk: number) {
     const { ctx, T } = this
-    const least = T.k < 0.7 ? 10 : T.k < 1.2 ? 5 : T.k < 2.2 ? 2 : 1
+    const least = T.k < 0.7 ? 50 : T.k < 1.2 ? 20 : T.k < 2.2 ? 5 : 1
     const size = this.fs(10)
     ctx.font = '600 ' + size + "px 'IBM Plex Sans',system-ui,sans-serif"
     ctx.textAlign = 'left'
@@ -1062,11 +1065,8 @@ export class Engine {
     ctx.fillStyle = '#e8eef7'
     for (const d of this.graphs) {
       if (d.order >= kk) continue
-      const n = this.pulse.get(d.id)
-      if (!n || (n < least && d !== this.selected)) continue
-      // The label is the graph's version number; it appears when the history has been read.
-      const v = this.pulseVersions.get(d.id)
-      if (v == null) continue
+      const v = this.pulseVersions.get(d.id) ?? d.version
+      if (v == null || (v < least && d !== this.selected)) continue
       const rr = this.pulseR(d)
       const x = d.x + rr * 0.8
       const y = d.y - rr * 0.8

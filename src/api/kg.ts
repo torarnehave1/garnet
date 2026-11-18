@@ -12,6 +12,8 @@ interface IndexRow {
   metaArea?: string | null
   publicationState?: string
   nodeCount?: number
+  // The graph's version number (graph_index, dev-worker e62f20a). Absent from an older server.
+  version?: number | null
   createdAt?: string
   updatedAt?: string
   world?: string | null
@@ -41,7 +43,7 @@ function toRow(g: IndexRow): Row {
     types: g.nodeTypes || [],
     image: g.image || '',
     createdBy: '',
-    version: null,
+    version: typeof g.version === 'number' && g.version > 0 ? g.version : null,
   }
 }
 

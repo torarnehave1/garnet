@@ -35,7 +35,7 @@ export function pulseColor(n: number): string {
   return c
 }
 export const pulseText = (n: number) => (n >= PULSE_CAP ? PULSE_CAP + '+' : String(n))
-// The label in Version mode: the graph's current version number.
+// The label in Version mode: the graph's current version number, shown on every graph.
 export const versionText = (v: number) => 'V. ' + v
 
 // A stored time in ms. The history writes "YYYY-MM-DD HH:MM:SS" in UTC; rows carry ISO times.

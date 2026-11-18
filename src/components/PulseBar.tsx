@@ -35,10 +35,10 @@ export function PulseBar({ mode, sum, onShow }: { mode: PulseMode; sum: PulseSum
           ))}
         </div>
       )}
-      {sum.changed > 0 && mode === 'count' && (
+      {mode === 'count' && (
         <div className="pulseNote">
-          The label is the graph’s version number, for example V. 12. It appears as each graph’s history is read. Zoom in to see them
-          all.
+          Every graph shows its version number, for example V. 12: how many times it has been saved. The ring marks a graph changed
+          in the last {PULSE_DAYS} days. Zoomed out, only V. 50 and higher are labelled; zoom in to see them all.
         </div>
       )}
       {sum.changed > 0 && mode === 'beat' && (
