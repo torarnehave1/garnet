@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 
 // The listening bar, after Claude's own dictation: while the Mic records, the message box gives
 // way to "Listening…", a waveform that follows the voice, ✕ (throw it away) and ✓ (put what was
-// said in the message box). Enter = ✓, Escape = ✕. The waveform is drawn on a canvas outside
+// said in the message box). Enter = ✓, Escape = ✕. With live dictation the words appear in the bar
+// while they are spoken: final text plain, the newest (still changing) text dimmed. The waveform is drawn on a canvas outside
 // React state, the same principle as the Engine: one bar per ~70 ms, newest on the right.
 
 const STEP_MS = 70
@@ -12,12 +13,17 @@ const GAP = 4 // px between bars
 interface Props {
   state: 'on' | 'busy'
   lang: 'no' | 'en'
+  /** Live text while speaking (gpt-live-transcribe): final part, then the interim part shown dimmed. */
+  text?: { final: string; interim: string } | null
+  /** A short line when the live text fails; the recording goes on and is written down at ✓. */
+  note?: string
   level: () => number
   onCancel: () => void
   onAccept: () => void
 }
 
-export function MicBar({ state, lang, level, onCancel, onAccept }: Props) {
+export function MicBar({ state, lang, text, note, level, onCancel, onAccept }: Props) {
+  const words = useRef<HTMLSpanElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const bar = useRef<HTMLDivElement>(null)
   const listening = state === 'on'
@@ -66,6 +72,11 @@ export function MicBar({ state, lang, level, onCancel, onAccept }: Props) {
     return () => cancelAnimationFrame(raf)
   }, [level, listening])
 
+  useEffect(() => {
+    const w = words.current
+    if (w) w.scrollTop = w.scrollHeight // keep the newest words in sight
+  }, [text])
+
   const label = listening
     ? lang === 'no' ? 'Lytter…' : 'Listening…'
     : lang === 'no' ? 'Skriver ned…' : 'Transcribing…'
@@ -87,7 +98,19 @@ export function MicBar({ state, lang, level, onCancel, onAccept }: Props) {
         }
       }}
     >
-      <span className="miclabel" aria-live="polite">{label}</span>
+      {text && (text.final || text.interim) ? (
+        <span ref={words} className="mictext" aria-live="polite">
+          {text.final}
+          {text.final && text.interim ? ' ' : ''}
+          {text.interim && <span className="micinterim">{text.interim}</span>}
+          {!listening && <span className="miclabel"> · {label}</span>}
+        </span>
+      ) : (
+        <span className="miclabel" aria-live="polite">
+          {label}
+          {note && <span className="micnote"> · {note}</span>}
+        </span>
+      )}
       <canvas ref={canvas} className="micwave" aria-hidden="true" />
       <button
         type="button"

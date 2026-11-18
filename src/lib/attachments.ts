@@ -17,7 +17,7 @@ const AUDIO_ENDPOINT = 'https://openai.vegvisr.org/audio'
 const CHUNK_SECONDS = 120
 export const TRANSCRIBE_MODEL = 'gpt-transcribe'
 // Names and terms the model should spell right. No < > or line breaks (the API refuses the request).
-const KEYWORDS = ['VEGR.AI', 'Vegvisr', 'Garnet', 'Enkel endring', 'AlivenessLAB', 'Claude']
+export const KEYWORDS = ['VEGR.AI', 'Vegvisr', 'Garnet', 'Enkel endring', 'AlivenessLAB', 'Claude']
 const MAX_PDF = 20 * 1024 * 1024
 const MAX_TEXT = 1024 * 1024
 

@@ -254,11 +254,15 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 /* The listening bar (MicBar): takes the message box's place while the Mic records, after Claude's own dictation. */
 .micbar { display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 6px 8px 6px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; outline: none; }
 .micbar:focus-visible { border-color: var(--accent); }
-.miclabel { color: var(--muted); font-style: italic; white-space: nowrap; }
-.micwave { flex: 1; min-width: 40px; height: 28px; color: var(--ink); display: block; }
+.miclabel { flex: 1; min-width: 0; color: var(--muted); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.micwave { flex: 0 1 160px; min-width: 40px; height: 28px; color: var(--ink); display: block; }
 .micbar.busy .micwave { color: var(--muted); }
 .chatform .micbar button.micbtn { align-self: center; display: grid; place-items: center; width: 30px; height: 30px; min-width: 0; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
 .chatform .micbar button.micbtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .chatform .micbar button.micbtn:disabled { opacity: 0.4; cursor: default; }
 .chatactions .ghost:has(.micicon) { display: inline-flex; align-items: center; justify-content: center; padding: 4.5px 10px; }
 .micicon { display: block; }
+.mictext .miclabel { flex: none; display: inline; }
+.mictext { flex: 1; min-width: 0; max-height: 96px; overflow-y: auto; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.micinterim { color: var(--muted); }
+.micnote { font-style: normal; font-size: 12px; color: var(--danger); }

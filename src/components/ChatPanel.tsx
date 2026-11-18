@@ -22,6 +22,7 @@ import {
   record,
   transcribe,
   TRANSCRIBE_MODEL,
+  KEYWORDS,
   type Recording,
   uploadImage,
   type Attachment,
@@ -29,6 +30,7 @@ import {
 import { CHAT_MODELS, chatModelName, DEFAULT_CHAT_MODEL } from '../lib/chatModels'
 import { chatMd, inlineMd } from '../lib/inlineMd'
 import { readLang } from '../lib/lang'
+import { canLive, startLive, type LiveSession } from '../lib/live'
 import { MicBar } from './MicBar'
 import type { User } from '../lib/types'
 
@@ -129,7 +131,10 @@ export function ChatPanel({
   const recording = useRef<Recording | null>(null)
   const [mic, setMic] = useState<'off' | 'on' | 'busy'>('off') // off · recording · transcribing
   const micAbort = useRef<AbortController | null>(null)
-  const micLevel = useCallback(() => recording.current?.level() ?? 0, [])
+  const liveSession = useRef<LiveSession | null>(null)
+  const [liveView, setLiveView] = useState<{ final: string; interim: string } | null>(null)
+  const [liveNote, setLiveNote] = useState('')
+  const micLevel = useCallback(() => liveSession.current?.level() ?? recording.current?.level() ?? 0, [])
 
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight })
@@ -140,6 +145,7 @@ export function ChatPanel({
   useEffect(() => () => abort.current?.abort(), [])
   useEffect(() => () => {
     recording.current?.cancel()
+    liveSession.current?.cancel()
     micAbort.current?.abort()
   }, [])
 
@@ -238,12 +244,29 @@ export function ChatPanel({
     }
   }
 
-  // Mic: a press starts recording and the message box gives way to the listening bar (MicBar):
+  // Mic: a press starts dictation and the message box gives way to the listening bar (MicBar):
   // ✓ (or Enter) puts what was said in the message box after what is already there, ✕ (or Escape)
   // throws it away. Nothing is sent before the person presses Send.
+  // Signed in, the words appear while they are spoken (gpt-live-transcribe, live.ts); if the live
+  // line fails — or without live support — the recording is written down whole at ✓ (gpt-transcribe).
   async function dictate() {
     setFileErr('')
     if (mic !== 'off') return
+    setLiveView(null)
+    setLiveNote('')
+    if (user?.token && canLive()) {
+      try {
+        liveSession.current = await startLive(user, [readLang()], KEYWORDS, setLiveView, (why) => {
+          console.warn('[Garnet] live dictation:', why)
+          setLiveNote(readLang() === 'no' ? 'live-tekst virker ikke, opptaket skrives ned ved ✓' : 'live text failed, the recording is written down at ✓')
+        })
+        setMic('on')
+        return
+      } catch (err) {
+        liveSession.current = null
+        console.warn('[Garnet] live dictation could not start, recording instead:', err)
+      }
+    }
     try {
       recording.current = await record()
       setMic('on')
@@ -252,35 +275,56 @@ export function ChatPanel({
     }
   }
 
+  const putInBox = (text: string) => setDraft((d) => (d.trim() ? d.replace(/\s+$/, '') + ' ' : '') + text)
+
   async function acceptMic() {
+    const live = liveSession.current
     const rec = recording.current
+    liveSession.current = null
     recording.current = null
-    if (!rec) return setMic('off')
+    if (!live && !rec) return setMic('off')
     setMic('busy')
     const ctl = new AbortController()
     micAbort.current = ctl
     try {
-      const text = await transcribe(await rec.stop(), readLang(), () => {}, ctl.signal, true)
+      let text = ''
+      if (live) {
+        const r = await live.finish()
+        if (ctl.signal.aborted) return
+        if (r.failed) console.warn('[Garnet] live dictation failed, writing down the recording:', r.failed)
+        text = r.text
+        // The live text is used as it is; the whole recording is the fallback when it failed or is empty.
+        if ((r.failed || !text) && r.audio) text = await transcribe(r.audio, readLang(), () => {}, ctl.signal, true)
+      } else if (rec) {
+        text = await transcribe(await rec.stop(), readLang(), () => {}, ctl.signal, true)
+      }
       if (ctl.signal.aborted) return
-      if (text) setDraft((d) => (d.trim() ? d.replace(/\s+$/, '') + ' ' : '') + text)
+      if (text) putInBox(text)
       else setFileErr(readLang() === 'no' ? 'Fant ingen tale i opptaket.' : 'No speech found in the recording.')
     } catch (err) {
       if (!ctl.signal.aborted) setFileErr(err instanceof Error ? err.message : String(err))
     } finally {
       if (micAbort.current === ctl) micAbort.current = null
       setMic('off')
+      setLiveView(null)
+      setLiveNote('')
       setTimeout(() => box.current?.focus(), 0)
     }
   }
 
   function cancelMic() {
+    liveSession.current?.cancel()
+    liveSession.current = null
     recording.current?.cancel()
     recording.current = null
     micAbort.current?.abort()
     micAbort.current = null
     setMic('off')
+    setLiveView(null)
+    setLiveNote('')
     setTimeout(() => box.current?.focus(), 0)
   }
+
 
   // An audio file becomes a transcript in the chat, which later questions can use.
   async function listen(file: File) {
@@ -572,7 +616,7 @@ export function ChatPanel({
         )}
         {fileErr && <div className="cerr">{fileErr}</div>}
         {mic !== 'off' ? (
-          <MicBar state={mic} lang={readLang()} level={micLevel} onCancel={cancelMic} onAccept={() => void acceptMic()} />
+          <MicBar state={mic} lang={readLang()} text={liveView} note={liveNote} level={micLevel} onCancel={cancelMic} onAccept={() => void acceptMic()} />
         ) : (
           <textarea
             ref={box}
