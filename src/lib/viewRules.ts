@@ -18,6 +18,7 @@ const RESERVE: Record<string, NodeView> = {
   'youtube-video': 'right',
   'album-video': 'right',
   audio: 'right',
+  'kurs-steg': 'right',
 }
 let rules: Record<string, NodeView> = RESERVE
 

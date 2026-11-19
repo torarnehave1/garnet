@@ -29,6 +29,14 @@ export function albumVideoUrl(node: Pick<KgNode, 'path'>): string | null {
   return /^https:\/\/[^\s"'<>]+$/.test(url) ? url : null
 }
 
+// The address of the video a course step (kurs-steg) plays: its path, when that is an https
+// address of a video file. The file lies in a Photos album, as an album-video's does. A step
+// without a video — the one with the pattern as a PDF — gives null, and is shown with its text.
+export function courseVideoUrl(node: Pick<KgNode, 'path'>): string | null {
+  const url = albumVideoUrl(node)
+  return url && /\.(mp4|m4v|mov|webm)(?:[?#].*)?$/i.test(url) ? url : null
+}
+
 // The address of the sound file an audio node plays: its path, when that is an https address,
 // the same field Knowledge Editor plays it from. null otherwise.
 export function audioUrl(node: Pick<KgNode, 'path'>): string | null {
