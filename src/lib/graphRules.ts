@@ -22,6 +22,13 @@ export function youtubeId(node: Pick<KgNode, 'label' | 'path'>): string | null {
   return null
 }
 
+// The address of the file an album-video node plays: its path, when that is an https address.
+// null otherwise, so nothing else is ever put into the player.
+export function albumVideoUrl(node: Pick<KgNode, 'path'>): string | null {
+  const url = String(node.path || '').trim()
+  return /^https:\/\/[^\s"'<>]+$/.test(url) ? url : null
+}
+
 // A flow graph (nodes of type flow-step): the order of its steps, read from the edges.
 // Starts at the node of type "flow", or at the steps nothing points to. [] when not a flow.
 export function flowOrder(ns: KgNode[], es: KgEdge[]): string[] {

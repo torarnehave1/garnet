@@ -16,6 +16,7 @@ const RESERVE: Record<string, NodeView> = {
   'mermaid-diagram': 'full',
   'sanskrit-ord': 'right',
   'youtube-video': 'right',
+  'album-video': 'right',
 }
 let rules: Record<string, NodeView> = RESERVE
 

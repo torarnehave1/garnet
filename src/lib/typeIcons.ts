@@ -61,7 +61,7 @@ const ICONS: Record<string, IconNode> = {
   'youtube-video': Play,
   'youtube-live': Play,
   video: Video,
-  'album-video': Video,
+  'album-video': Play,
   'cloudflare-video': Video,
   'cloudflare-live': Video,
   'realtime-video': Video,

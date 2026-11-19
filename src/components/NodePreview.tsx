@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
-import { textHtml, youtubeId } from '../lib/graphRules'
+import { albumVideoUrl, textHtml, youtubeId } from '../lib/graphRules'
 import type { KgNode, User } from '../lib/types'
 import { loadApprovedTypes, RegisteredTypeNode } from '../lib/vegvisrNode'
 
@@ -45,6 +45,8 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
 
   // A YouTube node has no renderer of its own: the panel plays the video.
   const video = node && (type === 'youtube-video' || type === 'youtube-live') ? youtubeId(node) : null
+  // An album-video node has none either: the panel plays the file from the Photos album.
+  const file = node && type === 'album-video' ? albumVideoUrl(node) : null
 
   return (
     <aside className={'preview' + (full ? ' full' : '')} aria-label={'Node ' + title}>
@@ -73,7 +75,15 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
             <div className="cardBody" dangerouslySetInnerHTML={{ __html: textHtml(node) }} />
           </>
         )}
-        {node && rendered === false && !video && (
+        {node && rendered === false && file && (
+          <>
+            <div className="previewVideo">
+              <video src={file} title={title} controls playsInline preload="metadata" />
+            </div>
+            <div className="cardBody" dangerouslySetInnerHTML={{ __html: textHtml(node) }} />
+          </>
+        )}
+        {node && rendered === false && !video && !file && (
           <>
             <p className="previewNote">The node type {type} has no approved view to draw it with, so the node’s text is shown.</p>
             {/* textHtml escapes everything it takes from the graph before adding its own tags. */}
