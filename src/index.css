@@ -320,3 +320,19 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .diagramSheet svg { width: 100% !important; height: 100% !important; max-width: none !important; }
 .diagramNote { position: absolute; inset: 0; margin: 0; padding: 20px; overflow: auto; color: #1b2433; }
 .diagramNote pre { white-space: pre-wrap; font-size: 12px; color: #4a5568; }
+
+/* The screen recorder in the top bar (Recorder.tsx) and its save dialog. */
+.recorder { display: inline-flex; align-items: center; gap: 4px; }
+.recorder .recmic { display: inline-grid; place-items: center; padding: 5px 8px; color: var(--muted); border-color: var(--line); }
+.recorder .recmic.on { color: var(--accent); border-color: var(--accent); }
+.recorder .recbtn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.recorder .recdot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.recorder .recbtn.on { color: var(--danger); border-color: var(--danger); animation: recpulse 1.2s ease-in-out infinite; }
+.recorder .recbtn.on .recdot { background: var(--danger); }
+.recorder .recerr { color: var(--danger); font-size: 12px; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .recorder .recbtn.on { animation: none; } }
+.recbox .recvideo { display: block; width: 100%; max-height: 220px; border-radius: 8px; background: #000; margin: 4px 0 10px; }
+.recbox .reclabel { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.recbox .dlgInput + .dlgInput { margin-top: 6px; }
+.recbox .recstatus { color: var(--muted); font-size: 13px; }
+.recbox a { color: var(--accent); }

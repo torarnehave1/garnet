@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearUser, completeMagicLink, isSuperadmin, magicInUrl, readUser } from './api/auth'
+import { Recorder } from './components/Recorder'
 import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, moveGraphToWorld, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
@@ -789,6 +790,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       </div>
 
       <div className="authbar">
+        {!isImpersonating() && <Recorder user={user} />}
         <button className="ghost" type="button" aria-pressed={chat === 'open'} onClick={() => setChat(chat === 'open' ? 'closed' : 'open')}>
           Chat
         </button>
