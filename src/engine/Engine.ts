@@ -45,6 +45,9 @@ export interface GraphItem extends Base {
   header: string
   createdBy: string
   version: number | null
+  sharedVia?: string // reached only through a share with this World of the viewer's
+  sharedMode?: 'read' | 'write'
+  sharedWith?: { world: string; mode: 'read' | 'write' }[]
 }
 export interface NodeItem extends Base {
   kind: 'n'
@@ -267,6 +270,9 @@ export class Engine {
       flowRows: 0,
       createdBy: g.createdBy,
       version: g.version,
+      sharedVia: g.sharedVia,
+      sharedMode: g.sharedMode,
+      sharedWith: g.sharedWith,
       x: 0,
       y: 0,
     }))

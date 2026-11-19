@@ -52,6 +52,8 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
       `Graph ${d.order + 1} of ${N} · ${d.n} nodes · ${d.status} · ` +
       (d.tags.length ? d.tags.join(' ') : 'no meta area') +
       (scopeAll ? ' · World: ' + (d.world || SHARED) : '') +
+      (d.sharedVia ? ` · shared with ${d.sharedVia} from ${d.world} (${d.sharedMode === 'write' ? 'read and write' : 'read only'})` : '') +
+      (d.sharedWith?.length ? ' · shared with ' + d.sharedWith.map((s) => `${s.world} (${s.mode === 'write' ? 'read and write' : 'read only'})`).join(', ') : '') +
       (d.sem.length ? ` · ${d.sem.length} semantic links` : '') +
       (d.types.length ? ' · node types: ' + d.types.join(', ') : '') +
       (d.live ? ' · live at ' + d.live : '')

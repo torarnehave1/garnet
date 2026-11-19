@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearUser, completeMagicLink, isSuperadmin, magicInUrl, readUser } from './api/auth'
-import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, moveGraphToWorld, renameGraph, restoreGraph, searchText } from './api/kg'
+import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, moveGraphToWorld, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { BulkTag } from './components/BulkTag'
@@ -661,6 +661,49 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       },
     })
   }
+  // Share a World's graph with another World: its members may read it, or read and change it. The graph
+  // stays where it is. One choice per action, so the dialog names exactly what will change.
+  function askShare(g: GraphItem) {
+    setMenu(null)
+    const row = rowsRef.current.find((r) => r.id === g.id)
+    const now = row?.sharedWith || []
+    const how = (m: string) => (m === 'write' ? 'read and write' : 'read only')
+    const others = worlds.filter((w) => w !== g.world)
+    const choices = [
+      ...others.flatMap((w) => [
+        { value: `share|${w}|read`, label: `Share with ${w} — read only` },
+        { value: `share|${w}|write`, label: `Share with ${w} — read and write` },
+      ]).filter((c) => {
+        const [, w, m] = c.value.split('|')
+        return !now.some((s) => s.world === w && s.mode === m)
+      }),
+      ...now.map((s) => ({ value: `stop|${s.world}|`, label: `Stop sharing with ${s.world}` })),
+    ]
+    setDialog({
+      title: 'Share with World',
+      text:
+        `“${g.title}” stays in ${g.world}. ` +
+        (now.length ? `It is shared with ${now.map((s) => `${s.world} (${how(s.mode)})`).join(', ')}. ` : 'It is shared with no other World. ') +
+        'Choose what to change:',
+      choices,
+      ok: 'Apply',
+      run: async (v) => {
+        const [act, w, m] = v.split('|')
+        if (!w) throw plain('Choose a World.')
+        const shares = act === 'stop' ? await unshareGraph(user, g.id, w) : await shareGraph(user, g.id, w, m === 'write' ? 'write' : 'read')
+        const next = rowsRef.current.map((r) => {
+          if (r.id !== g.id) return r
+          const { sharedWith: _old, ...rest } = r
+          return shares.length ? { ...rest, sharedWith: shares } : rest
+        })
+        writeCache(scope, user, next)
+        keep.current = true
+        setRows(next)
+        setDialog(null)
+        setNote(act === 'stop' ? `“${g.title}” is no longer shared with ${w}.` : `“${g.title}” is shared with ${w} (${how(m)}).`)
+      },
+    })
+  }
   function askDelete(g: GraphItem) {
     setMenu(null)
     setDialog({
@@ -770,6 +813,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           onRename={() => askRename(menu.g)}
           onDelete={() => askDelete(menu.g)}
           onMove={isSuperadmin(user) && worlds.some((w) => w !== menu.g.world) ? () => askMove(menu.g) : undefined}
+          onShare={menu.g.world && !menu.g.sharedVia && worlds.some((w) => w !== menu.g.world) ? () => askShare(menu.g) : undefined}
         />
       )}
       {dialog && <Dialog spec={dialog} why={why} onClose={() => setDialog(null)} />}

@@ -16,7 +16,12 @@ export interface Row {
   header: string
   createdBy: string
   version: number | null
+  // Sharing between Worlds (graph_shares, dev-worker 2026-11-19). Absent in an older cache.
+  sharedVia?: string // reached only because it is shared with this World of mine
+  sharedMode?: ShareMode // with sharedVia: may I change it
+  sharedWith?: { world: string; mode: ShareMode }[] // every World it is shared with
 }
+export type ShareMode = 'read' | 'write'
 
 // A node and its edges as /getknowgraph returns them.
 export interface KgNode {

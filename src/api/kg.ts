@@ -1,4 +1,4 @@
-import type { KgGraph, Row, Scope, User } from '../lib/types'
+import type { KgGraph, Row, Scope, ShareMode, User } from '../lib/types'
 import { utcMs } from '../lib/pulse'
 import { parseTags } from '../lib/rows'
 import { mcpCall } from './mcp'
@@ -21,6 +21,9 @@ interface IndexRow {
   image?: string | null
   // The graph's header image (graph_index, dev-worker 2026-11-19). Absent from an older server.
   headerImage?: string | null
+  sharedVia?: string
+  sharedMode?: ShareMode
+  sharedWith?: { world: string; mode: ShareMode }[]
   publishedDomains?: string[]
   nodes?: { id: string; label?: string; type?: string }[]
   edges?: { source: string; target: string }[]
@@ -47,6 +50,8 @@ function toRow(g: IndexRow): Row {
     header: g.headerImage || '',
     createdBy: '',
     version: typeof g.version === 'number' && g.version > 0 ? g.version : null,
+    ...(g.sharedVia ? { sharedVia: g.sharedVia, sharedMode: g.sharedMode === 'write' ? 'write' : 'read' } : {}),
+    ...(g.sharedWith?.length ? { sharedWith: g.sharedWith } : {}),
   }
 }
 
@@ -69,6 +74,20 @@ export interface TextSearch {
 }
 export function searchText(user: User, scope: Scope, query: string, graphIds: string[]): Promise<TextSearch> {
   return mcpCall<TextSearch>(user, 'search_text', { query, scope, graphIds })
+}
+
+// Share a World's graph with another World, or stop (dev-worker 4c75ed8). The server checks that the
+// person is a member of the graph's own World. Answers every World it is shared with afterwards.
+type Shares = { world: string; mode: ShareMode }[]
+export async function shareGraph(user: User, id: string, world: string, mode: ShareMode): Promise<Shares> {
+  const a = await mcpCall<{ shares?: Shares }>(user, 'share_graph_with_world', { graphId: id, world, mode })
+  clearCaches()
+  return (a.shares || []).map((s) => ({ world: s.world, mode: s.mode }))
+}
+export async function unshareGraph(user: User, id: string, world: string): Promise<Shares> {
+  const a = await mcpCall<{ shares?: Shares }>(user, 'unshare_graph_from_world', { graphId: id, world })
+  clearCaches()
+  return (a.shares || []).map((s) => ({ world: s.world, mode: s.mode }))
 }
 
 // Move a graph into a World's own storage (Superadmin only; the server checks). Id and links stay.
