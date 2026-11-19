@@ -29,7 +29,7 @@ function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; 
   return <div className="cardBody" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
+export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram, ownView = false, onOwnView }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void; onDiagram: (n: NodeItem) => void; ownView?: boolean; onOwnView?: (n: NodeItem) => void }) {
   if (!item) return null
   let title = ''
   let meta = ''
@@ -68,6 +68,18 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
         <p>
           <button type="button" className="ghost" onClick={() => onDiagram(item)}>
             Show the diagram
+          </button>
+        </p>
+      )}
+      {/* A node type with a view of its own (an approved renderer, or a rule that opens it at the
+          right): the card stays the default, and this opens the node drawn by that view. */}
+      {item.kind === 'n' && ownView && onOwnView && (
+        <p className="ownview">
+          <span className="ownmark" title={'The node type ' + item.type + ' has a view of its own'}>
+            Own view
+          </span>
+          <button type="button" className="ghost" onClick={() => onOwnView(item)}>
+            Show it at the right
           </button>
         </p>
       )}

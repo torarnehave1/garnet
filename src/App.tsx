@@ -13,6 +13,7 @@ import { Login } from './components/Login'
 import { applyRules, nodeView, readRules, RULES_GRAPH_ID } from './lib/viewRules'
 import { PulseBar } from './components/PulseBar'
 import { SearchBar, type Found } from './components/SearchBar'
+import { loadApprovedTypes } from './lib/vegvisrNode'
 import { ImpersonationBar, isImpersonating, returnToOwnLogin } from './components/ImpersonationBar'
 import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
@@ -25,7 +26,7 @@ import { usePulse } from './lib/usePulse'
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 const DiagramModal = lazy(() => import('./components/DiagramModal'))
 const NodePreview = lazy(() => import('./components/NodePreview'))
-import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
+import { Engine, type Focus, type GraphItem, type Item, type NodeItem, type Snapshot } from './engine/Engine'
 import {
   DEFAULT_FILTERS,
   monthOf,
@@ -244,6 +245,31 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   // The node shown in the panel at the right by its type's own renderer, if any (viewRules.ts).
   const [preview, setPreview] = useState<{ graphId: string; nodeId: string; world: string; title: string; type: string; full: boolean } | null>(null)
   const closePreview = useCallback(() => setPreview(null), [])
+  // Does the selected node's type have a view of its own? An approved renderer for a registered
+  // type (asked of the rendering engine, for the World the graph is stored in), or a rule that opens
+  // the type at the right. Such a node keeps the card as the default (architect 2026-11-19) and the
+  // card offers the view; a new node type shows up here with no change to Garnet.
+  const [ownView, setOwnView] = useState(false)
+  useEffect(() => {
+    if (selected?.kind !== 'n' || selected.type === 'mermaid-diagram') {
+      setOwnView(false)
+      return
+    }
+    if (nodeView(selected.type) === 'right') {
+      setOwnView(true)
+      return
+    }
+    let live = true
+    setOwnView(false)
+    const type = selected.type
+    loadApprovedTypes(selected.parent.world || null).then((types) => {
+      if (live) setOwnView(types.has(type))
+    })
+    return () => {
+      live = false
+    }
+  }, [selected])
+  const showOwnView = useCallback((n: NodeItem) => setPreview({ graphId: n.parent.id, nodeId: n.nid, world: n.parent.world, title: n.label, type: n.type, full: false }), [])
   const [, bump] = useState(0)
   const [zoomZ, setZoomZ] = useState(1)
   const [sw, setSw] = useState({ rate: true, meta: true, sem: true })
@@ -851,6 +877,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             scopeAll={scope === 'all'}
             onClose={() => engine?.select(null)}
             onDiagram={(n) => setDiagram({ graphId: n.parent.id, nodeId: n.nid, title: n.label })}
+            ownView={ownView}
+            onOwnView={showOwnView}
           />
           <div className="switches">
             <div className="switch static">Zoom {zoomZ < 10 ? zoomZ.toFixed(1) : Math.round(zoomZ)}×</div>
