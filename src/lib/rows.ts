@@ -53,14 +53,27 @@ export interface Option {
   label: string
 }
 
+// The Worlds a graph is seen in: the one that stores it, and every World it is shared with.
+// A graph shared from vegr.ai with navaninas.site belongs on the navaninas.site map too
+// (owner's words 2026-11-19: "I have shared a graph to another world. Of course it should be
+// shown there"). `sharedWith` is what the owner's index carries; `sharedVia` is what a member of
+// the receiving World gets, so both are read.
+export function worldsOf(r: Row): string[] {
+  const seen = new Set<string>([r.world || ''])
+  if (r.sharedVia) seen.add(r.sharedVia)
+  r.sharedWith?.forEach((s) => s.world && seen.add(s.world))
+  return Array.from(seen)
+}
+
 export function worldRows(rows: Row[], world: string): Row[] {
-  return world === '*' ? rows : rows.filter((r) => (r.world || '') === world)
+  return world === '*' ? rows : rows.filter((r) => worldsOf(r).includes(world))
 }
 
 // Every World the person can use is listed, also one with no graphs yet (count 0).
+// A shared graph is counted in each World it is seen in, so the counts can add up to more than All.
 export function worldOptions(rows: Row[], worlds: string[] = []): Option[] {
   const count = new Map<string, number>()
-  rows.forEach((r) => count.set(r.world || '', (count.get(r.world || '') || 0) + 1))
+  rows.forEach((r) => worldsOf(r).forEach((w) => count.set(w, (count.get(w) || 0) + 1)))
   worlds.forEach((w) => w && !count.has(w) && count.set(w, 0))
   const names = Array.from(count.keys()).sort()
   const out: Option[] = [{ value: '*', label: `All (${rows.length})` }]
