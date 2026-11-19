@@ -482,7 +482,10 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     const u = userRef.current
     const sc = scopeRef.current
     const asks = f.tags.length ? f.tags : ['']
-    Promise.all(asks.map((tag) => loadNodes(u, sc, tag, ty)))
+    // Ask for the graphs that are SHOWN, not for everything the meta area or node type covers:
+    // the other filters (World, dates, published …) have already made the selection small.
+    const ids = shown.map((r) => r.id)
+    Promise.all(asks.map((tag) => loadNodes(u, sc, tag, ty, ids)))
       .then((parts) => {
         if (mine !== renderToken.current) return
         const detail = Object.assign({}, ...parts)
