@@ -12,6 +12,8 @@ export interface Row {
   types: string[]
   // The graph's card image (its first portfolio-image node), or ''.
   image: string
+  // The address of the graph's header image, '' when it has none.
+  header: string
   createdBy: string
   version: number | null
 }

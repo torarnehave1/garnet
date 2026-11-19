@@ -41,6 +41,8 @@ export interface GraphItem extends Base {
   flowRows: number
   // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
   image: string
+  // The graph's header image: drawn inside the circle once the circle is large on screen.
+  header: string
   createdBy: string
   version: number | null
 }
@@ -62,6 +64,10 @@ export type Item = Hub | GraphItem | NodeItem
 // What makes a graph a course, and the size its card image is kept at (one square bitmap per course).
 const COURSE_TYPE = 'kurs-steg'
 const PIC = 256
+// A graph's header image shows inside its circle from this radius on screen, and is fully there
+// at the second number: about when one or two graphs fill the view.
+const HEADER_FROM_PX = 34
+const HEADER_FULL_PX = 52
 
 type Link<S extends Item = Item, T extends Item = Item> = SimulationLinkDatum<Item> & { source: S; target: T }
 interface SemLink extends Link<GraphItem, GraphItem> {
@@ -255,6 +261,7 @@ export class Engine {
       t,
       r: Math.min(6, 1.8 + Math.sqrt(g.n) * 0.35),
       image: (g.types || []).includes(COURSE_TYPE) ? g.image || '' : '',
+      header: g.header || '',
       color: g.tags.length ? colorOf(g.tags[0]) : LOOSE,
       sem: [],
       flowRows: 0,
@@ -924,6 +931,23 @@ export class Engine {
       ctx.beginPath()
       ctx.arc(d.x, d.y, r, 0, 6.2832)
       ctx.fill()
+      const px = r * T.k
+      if (d.header && px >= HEADER_FROM_PX && !fresh) {
+        // Zoomed far in: the header image fills the circle, inside a rim of the graph's colour.
+        const pic = this.pic(d.header, px * 2)
+        if (pic) {
+          const inner = r * 0.92
+          const a = ctx.globalAlpha
+          ctx.save()
+          ctx.globalAlpha = a * Math.min(1, (px - HEADER_FROM_PX) / (HEADER_FULL_PX - HEADER_FROM_PX) + 0.15)
+          ctx.beginPath()
+          ctx.arc(d.x, d.y, inner, 0, 6.2832)
+          ctx.clip()
+          ctx.drawImage(pic, d.x - inner, d.y - inner, inner * 2, inner * 2)
+          ctx.restore()
+          ctx.globalAlpha = a
+        }
+      }
     }
     if (pulseOn) this.drawPulse(kk, now)
     this.hubs.forEach((d, i) => {

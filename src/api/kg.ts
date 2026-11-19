@@ -19,6 +19,8 @@ interface IndexRow {
   world?: string | null
   nodeTypes?: string[]
   image?: string | null
+  // The graph's header image (graph_index, dev-worker 2026-11-19). Absent from an older server.
+  headerImage?: string | null
   publishedDomains?: string[]
   nodes?: { id: string; label?: string; type?: string }[]
   edges?: { source: string; target: string }[]
@@ -42,6 +44,7 @@ function toRow(g: IndexRow): Row {
     world: g.world || '',
     types: g.nodeTypes || [],
     image: g.image || '',
+    header: g.headerImage || '',
     createdBy: '',
     version: typeof g.version === 'number' && g.version > 0 ? g.version : null,
   }
