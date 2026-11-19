@@ -298,6 +298,8 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .previewNote { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
 .previewVideo { position: relative; width: 100%; aspect-ratio: 16 / 9; margin-bottom: 12px; border-radius: 10px; overflow: hidden; background: #000; }
 .previewVideo iframe, .previewVideo video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.previewAudio { margin-bottom: 12px; }
+.previewAudio audio { display: block; width: 100%; }
 /* Garnet is a dark page; the renderer's frame is a plain document. With the same colour scheme on
    both sides the frame stays see-through, so its dark theme is drawn on the panel, not on white. */
 .preview vegvisr-node { color-scheme: light; }

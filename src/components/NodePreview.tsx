@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
 import { useEditorBase, viewLink } from '../lib/editorLink'
-import { albumVideoUrl, textHtml, youtubeId } from '../lib/graphRules'
+import { albumVideoUrl, audioUrl, textHtml, youtubeId } from '../lib/graphRules'
 import type { KgNode, User } from '../lib/types'
 import { loadApprovedTypes, RegisteredTypeNode } from '../lib/vegvisrNode'
 
@@ -48,6 +48,8 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
   const video = node && (type === 'youtube-video' || type === 'youtube-live') ? youtubeId(node) : null
   // An album-video node has none either: the panel plays the file from the Photos album.
   const file = node && type === 'album-video' ? albumVideoUrl(node) : null
+  // Nor has an audio node: the panel plays the sound file, as Knowledge Editor does.
+  const sound = node && type === 'audio' ? audioUrl(node) : null
 
   return (
     <aside className={'preview' + (full ? ' full' : '')} aria-label={'Node ' + title}>
@@ -84,7 +86,15 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
             <div className="cardBody" dangerouslySetInnerHTML={{ __html: textHtml(node) }} />
           </>
         )}
-        {node && rendered === false && !video && !file && (
+        {node && rendered === false && sound && (
+          <>
+            <div className="previewAudio">
+              <audio src={sound} title={title} controls preload="metadata" />
+            </div>
+            <div className="cardBody" dangerouslySetInnerHTML={{ __html: textHtml(node) }} />
+          </>
+        )}
+        {node && rendered === false && !video && !file && !sound && (
           <>
             <p className="previewNote">The node type {type} has no approved view to draw it with, so the node’s text is shown.</p>
             {/* textHtml escapes everything it takes from the graph before adding its own tags. */}

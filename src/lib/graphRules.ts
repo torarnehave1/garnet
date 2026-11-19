@@ -29,6 +29,12 @@ export function albumVideoUrl(node: Pick<KgNode, 'path'>): string | null {
   return /^https:\/\/[^\s"'<>]+$/.test(url) ? url : null
 }
 
+// The address of the sound file an audio node plays: its path, when that is an https address,
+// the same field Knowledge Editor plays it from. null otherwise.
+export function audioUrl(node: Pick<KgNode, 'path'>): string | null {
+  return albumVideoUrl(node)
+}
+
 // A flow graph (nodes of type flow-step): the order of its steps, read from the edges.
 // Starts at the node of type "flow", or at the steps nothing points to. [] when not a flow.
 export function flowOrder(ns: KgNode[], es: KgEdge[]): string[] {
