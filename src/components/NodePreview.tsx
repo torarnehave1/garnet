@@ -94,7 +94,7 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
       </div>
       <p className="previewFoot">
         <a href={viewLink(editor, graphId)} target="_blank" rel="noopener">
-          Open the graph in VEGR.AI
+          Open Knowledge Graph
         </a>
       </p>
     </aside>

@@ -43,7 +43,7 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
     title = item.label
     meta = 'Node' + (item.type ? ' of type ' + item.type : '') + ' in the graph ' + item.parent.title + (item.links.length ? ` · ${item.links.length} edges` : '')
     body = <NodeText graphId={item.parent.id} nodeId={item.nid} user={user} />
-    link = { href: viewLink(editor, item.parent.id), text: 'Open the graph in VEGR.AI' }
+    link = { href: viewLink(editor, item.parent.id), text: 'Open Knowledge Graph' }
   } else {
     const d = item
     title = d.title
@@ -55,7 +55,7 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
       (d.sem.length ? ` · ${d.sem.length} semantic links` : '') +
       (d.types.length ? ' · node types: ' + d.types.join(', ') : '') +
       (d.live ? ' · live at ' + d.live : '')
-    link = { href: viewLink(editor, d.id), text: 'Open in VEGR.AI' }
+    link = { href: viewLink(editor, d.id), text: 'Open Knowledge Graph' }
   }
   return (
     <div className="card">

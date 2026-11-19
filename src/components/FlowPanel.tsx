@@ -171,7 +171,7 @@ export default function FlowPanel({ user, graphId, world, title, focus, onClose 
         <p className="flowfoot">
           Read-only. A flow is run over the MCP tool run_flow.{' '}
           <a href={viewLink(editor, graphId)} target="_blank" rel="noreferrer">
-            Open the graph in VEGR.AI
+            Open Knowledge Graph
           </a>
         </p>
       </div>
