@@ -64,10 +64,10 @@ export type Item = Hub | GraphItem | NodeItem
 // What makes a graph a course, and the size its card image is kept at (one square bitmap per course).
 const COURSE_TYPE = 'kurs-steg'
 const PIC = 256
-// A graph's header image shows inside its circle from this radius on screen, and is fully there
-// at the second number: about when one or two graphs fill the view.
-const HEADER_FROM_PX = 34
-const HEADER_FULL_PX = 52
+// A graph's header image shows inside its circle from the first zoom (as the Zoom chip shows
+// it) and is 95 % there at the second (Tor Arne, 2026-11-19: 95 % at zoom 4.9).
+const HEADER_FROM_Z = 3.5
+const HEADER_95_Z = 4.9
 
 type Link<S extends Item = Item, T extends Item = Item> = SimulationLinkDatum<Item> & { source: S; target: T }
 interface SemLink extends Link<GraphItem, GraphItem> {
@@ -931,15 +931,15 @@ export class Engine {
       ctx.beginPath()
       ctx.arc(d.x, d.y, r, 0, 6.2832)
       ctx.fill()
-      const px = r * T.k
-      if (d.header && px >= HEADER_FROM_PX && !fresh) {
-        // Zoomed far in: the header image fills the circle, inside a rim of the graph's colour.
-        const pic = this.pic(d.header, px * 2)
+      const z = T.k / this.zoom0
+      if (d.header && z > HEADER_FROM_Z && !fresh) {
+        // Zoomed in: the header image fills the circle, inside a rim of the graph's colour.
+        const pic = this.pic(d.header, Math.max(12, r * 2 * T.k))
         if (pic) {
           const inner = r * 0.92
           const a = ctx.globalAlpha
           ctx.save()
-          ctx.globalAlpha = a * Math.min(1, (px - HEADER_FROM_PX) / (HEADER_FULL_PX - HEADER_FROM_PX) + 0.15)
+          ctx.globalAlpha = a * Math.min(1, ((z - HEADER_FROM_Z) / (HEADER_95_Z - HEADER_FROM_Z)) * 0.95)
           ctx.beginPath()
           ctx.arc(d.x, d.y, inner, 0, 6.2832)
           ctx.clip()
