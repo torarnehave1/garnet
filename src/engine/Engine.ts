@@ -71,6 +71,9 @@ const PIC = 256
 // it) and is 95 % there at the second (Tor Arne, 2026-11-19: 95 % at zoom 4.9).
 const HEADER_FROM_Z = 3.5
 const HEADER_95_Z = 4.9
+// A graph's share squares show once its circle is this large on the screen, in the colour kept for sharing.
+const SHARE_MIN_PX = 7
+const SHARE_COLOR = '#c9a2f2'
 
 type Link<S extends Item = Item, T extends Item = Item> = SimulationLinkDatum<Item> & { source: S; target: T }
 interface SemLink extends Link<GraphItem, GraphItem> {
@@ -956,6 +959,7 @@ export class Engine {
       }
     }
     if (pulseOn) this.drawPulse(kk, now)
+    this.drawShares(kk)
     this.hubs.forEach((d, i) => {
       if (!d.vis) return
       const r = this.hubR(d, false)
@@ -1011,6 +1015,54 @@ export class Engine {
     }
     if (this.pulseMode === 'count' && !this.skeleton) this.drawPulseCounts(kk)
     ctx.globalAlpha = 1
+  }
+  // Every World a graph is shared with: one small square to the left of the graph, tied to it by a
+  // dashed line, the World's address beside it once zoomed in close (Tor Arne, 2026-11-19: "a small
+  // square node" per World). Outlined = that World may read, filled = it may also change the graph.
+  // Drawn only, not part of the simulation: the squares follow their graph and cannot be picked.
+  // The left side, because a flow's steps stand in a column on the right.
+  private drawShares(kk: number) {
+    const { ctx, T, W, H } = this
+    const label = T.k >= 3
+    if (label) {
+      ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"
+      ctx.textAlign = 'right'
+    }
+    for (const d of this.graphs) {
+      const shares = d.sharedWith
+      if (!shares?.length || d.order >= kk) continue
+      const px = d.r * T.k
+      if (px < SHARE_MIN_PX) continue
+      const sx = d.x * T.k + T.x
+      const sy = d.y * T.k + T.y
+      const reach = px * 6
+      if (sx < -reach || sy < -reach || sx > W + reach || sy > H + reach) continue // outside the window
+      const side = d.r * 0.42
+      const gap = Math.max(side * 1.7, label ? this.fs(9) * 1.5 : 0)
+      const x = d.x - (d.image ? d.r * 1.42 : d.r) - side * 2.2
+      const lw = 1.1 / T.k
+      ctx.globalAlpha = this.isNear(d) ? 0.9 : 0.08
+      ctx.strokeStyle = SHARE_COLOR
+      ctx.lineWidth = lw
+      shares.forEach((sh, i) => {
+        const y = d.y + (i - (shares.length - 1) / 2) * gap
+        ctx.setLineDash([3 / T.k, 3 / T.k])
+        ctx.beginPath()
+        ctx.moveTo(d.x - d.r, d.y)
+        ctx.lineTo(x + side / 2, y)
+        ctx.stroke()
+        ctx.setLineDash([])
+        ctx.fillStyle = sh.mode === 'write' ? SHARE_COLOR : '#0b1220'
+        ctx.fillRect(x - side / 2, y - side / 2, side, side)
+        ctx.strokeRect(x - side / 2, y - side / 2, side, side)
+        if (label) {
+          ctx.fillStyle = SHARE_COLOR
+          ctx.fillText(sh.world, x - side / 2 - 3 / T.k, y + this.fs(9) * 0.35)
+        }
+      })
+    }
+    ctx.setLineDash([])
+    ctx.textAlign = 'center'
   }
   // How far out from a graph's centre its pulse ring stands. A course is a square: the ring goes round its corners.
   private pulseR(d: GraphItem) {
