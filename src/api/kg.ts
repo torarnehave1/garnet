@@ -99,14 +99,26 @@ export async function moveGraphToWorld(user: User, id: string, world: string): P
 
 // Nodes (id, label, type) and edges of every graph under one meta area or holding one node type,
 // in one request. Kept for the session, so choosing the same filter again draws at once.
+//
+// `ids` are the graphs the map is showing (at most NODE_IDS_MAX). The server narrows to them before
+// it counts against its 600-graph limit — without them "created today, with a fulltext node" (five
+// graphs) was refused because fulltext alone is in 1,792 (2026-11-19). An older server ignores them.
+export const NODE_IDS_MAX = 600
 const nodeCache = new Map<string, Promise<Record<string, KgGraph>>>()
-export function loadNodes(user: User, scope: Scope, tag: string, type: string): Promise<Record<string, KgGraph>> {
-  const key = `${scope}|${tag}|${type}`
+const idsKey = (ids: string[]) => {
+  let h = 5381
+  for (const id of ids) for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) | 0
+  return `${ids.length}:${h}`
+}
+export function loadNodes(user: User, scope: Scope, tag: string, type: string, ids?: string[]): Promise<Record<string, KgGraph>> {
+  const picked = ids && ids.length && ids.length <= NODE_IDS_MAX ? [...ids].sort() : null
+  const key = `${scope}|${tag}|${type}|${picked ? idsKey(picked) : '*'}`
   let p = nodeCache.get(key)
   if (!p) {
     const args: Record<string, unknown> = { scope, includeNodes: true }
     if (tag) args.metaArea = tag
     if (type) args.nodeType = type
+    if (picked) args.graphIds = picked
     p = mcpCall<IndexAnswer>(user, 'graph_index', args).then((a) => {
       const by: Record<string, KgGraph> = {}
       for (const g of a.graphs || []) by[g.graphId] = { nodes: g.nodes || [], edges: g.edges || [] }
