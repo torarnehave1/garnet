@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
 import type { Item, NodeItem } from '../engine/Engine'
+import { useEditorBase, viewLink } from '../lib/editorLink'
 import { textHtml } from '../lib/graphRules'
 import { dayOf, SHARED } from '../lib/rows'
 import type { User } from '../lib/types'
 
-const VIEW = 'https://editor.vegvisr.org/view?graphId='
 
 // The node's own text, read from the graph (already cached when the node is drawn).
 function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; user: User }) {
@@ -30,6 +30,7 @@ function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; 
 }
 
 export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
+  const editor = useEditorBase(item?.kind === 'g' ? item.world : item?.kind === 'n' ? item.parent.world : '')
   if (!item) return null
   let title = ''
   let meta = ''
@@ -42,7 +43,7 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
     title = item.label
     meta = 'Node' + (item.type ? ' of type ' + item.type : '') + ' in the graph ' + item.parent.title + (item.links.length ? ` · ${item.links.length} edges` : '')
     body = <NodeText graphId={item.parent.id} nodeId={item.nid} user={user} />
-    link = { href: VIEW + encodeURIComponent(item.parent.id), text: 'Open the graph in VEGR.AI' }
+    link = { href: viewLink(editor, item.parent.id), text: 'Open the graph in VEGR.AI' }
   } else {
     const d = item
     title = d.title
@@ -54,7 +55,7 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
       (d.sem.length ? ` · ${d.sem.length} semantic links` : '') +
       (d.types.length ? ' · node types: ' + d.types.join(', ') : '') +
       (d.live ? ' · live at ' + d.live : '')
-    link = { href: VIEW + encodeURIComponent(d.id), text: 'Open in VEGR.AI' }
+    link = { href: viewLink(editor, d.id), text: 'Open in VEGR.AI' }
   }
   return (
     <div className="card">

@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
+import { useEditorBase, viewLink } from '../lib/editorLink'
 import { albumVideoUrl, textHtml, youtubeId } from '../lib/graphRules'
 import type { KgNode, User } from '../lib/types'
 import { loadApprovedTypes, RegisteredTypeNode } from '../lib/vegvisrNode'
 
-const VIEW = 'https://editor.vegvisr.org/view?graphId='
 
 // A node shown by its type's own approved renderer, the same picture Knowledge Editor gives: in a
 // panel at the right, or over the whole window (`full`), as the rules graph says (viewRules.ts).
 // A type without an approved renderer is shown with the node's text.
 export default function NodePreview({ user, graphId, nodeId, world, title, type, full = false, onClose }: { user: User; graphId: string; nodeId: string; world: string; title: string; type: string; full?: boolean; onClose: () => void }) {
+  const editor = useEditorBase(world)
   const [node, setNode] = useState<KgNode | null>(null)
   const [rendered, setRendered] = useState<boolean | null>(null) // null: not known yet
   const [error, setError] = useState('')
@@ -92,7 +93,7 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
         )}
       </div>
       <p className="previewFoot">
-        <a href={VIEW + encodeURIComponent(graphId)} target="_blank" rel="noopener">
+        <a href={viewLink(editor, graphId)} target="_blank" rel="noopener">
           Open the graph in VEGR.AI
         </a>
       </p>

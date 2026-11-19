@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { Background, Controls, Handle, Position, ReactFlow, useNodesState, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { loadGraph } from '../api/kg'
+import { useEditorBase, viewLink } from '../lib/editorLink'
 import { kindOf, readFlow, ROUTE_COLORS, stepSub, type FlowBox } from '../lib/flow'
 import type { User } from '../lib/types'
 
-const VIEW = 'https://editor.vegvisr.org/view?graphId='
 
 // The flow of one graph, drawn in a panel on the right. Read-only: nothing here saves or runs a
 // flow. It is drawn with React Flow so that editing can be added later on the same canvas.
@@ -108,7 +108,8 @@ function Canvas({ boxes, edges, pick, onPick }: { boxes: FlowBox[]; edges: Edge[
   )
 }
 
-export default function FlowPanel({ user, graphId, title, focus, onClose }: { user: User; graphId: string; title: string; focus: string | null; onClose: () => void }) {
+export default function FlowPanel({ user, graphId, world, title, focus, onClose }: { user: User; graphId: string; world: string; title: string; focus: string | null; onClose: () => void }) {
+  const editor = useEditorBase(world)
   const [state, setState] = useState<{ id: string; boxes: FlowBox[]; edges: Edge[] } | { id: string; error: string } | null>(null)
   const [pick, setPick] = useState<string | null>(focus)
 
@@ -169,7 +170,7 @@ export default function FlowPanel({ user, graphId, title, focus, onClose }: { us
         <Details box={box} />
         <p className="flowfoot">
           Read-only. A flow is run over the MCP tool run_flow.{' '}
-          <a href={VIEW + encodeURIComponent(graphId)} target="_blank" rel="noreferrer">
+          <a href={viewLink(editor, graphId)} target="_blank" rel="noreferrer">
             Open the graph in VEGR.AI
           </a>
         </p>

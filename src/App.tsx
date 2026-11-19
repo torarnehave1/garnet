@@ -812,6 +812,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           <FlowPanel
             user={user}
             graphId={flowOf.graph.id}
+            world={flowOf.graph.world}
             title={flowOf.graph.title}
             focus={flowOf.step}
             onClose={() => setFlowClosed(flowOf.graph.id)}
