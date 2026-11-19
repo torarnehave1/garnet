@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
 import { useEditorBase, viewLink } from '../lib/editorLink'
-import { albumVideoUrl, audioUrl, textHtml, youtubeId } from '../lib/graphRules'
+import { albumVideoUrl, audioUrl, courseVideoUrl, textHtml, youtubeId } from '../lib/graphRules'
 import type { KgNode, User } from '../lib/types'
 import { loadApprovedTypes, RegisteredTypeNode } from '../lib/vegvisrNode'
 
@@ -47,7 +47,8 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
   // A YouTube node has no renderer of its own: the panel plays the video.
   const video = node && (type === 'youtube-video' || type === 'youtube-live') ? youtubeId(node) : null
   // An album-video node has none either: the panel plays the file from the Photos album.
-  const file = node && type === 'album-video' ? albumVideoUrl(node) : null
+  // A course step (kurs-steg) with a video is the same: a file in a Photos album (2026-11-19).
+  const file = !node ? null : type === 'album-video' ? albumVideoUrl(node) : type === 'kurs-steg' ? courseVideoUrl(node) : null
   // Nor has an audio node: the panel plays the sound file, as Knowledge Editor does.
   const sound = node && type === 'audio' ? audioUrl(node) : null
 
