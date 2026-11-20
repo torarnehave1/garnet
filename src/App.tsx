@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearUser, completeMagicLink, isSuperadmin, magicInUrl, readUser } from './api/auth'
 import { Recorder } from './components/Recorder'
-import { clearCaches, deleteGraph, HISTORY_TYPE, loadGraph, loadHistoryGraphIds, loadIndex, loadNodes, loadVirtualWorlds, moveGraphToWorld, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph } from './api/kg'
+import { clearCaches, deleteGraph, HISTORY_TYPE, loadGraph, loadHistoryGraphIds, loadIndex, loadNodes, loadVirtualWorlds, moveGraphToWorld, readMetaArea, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph, writeMetaArea } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { BulkTag } from './components/BulkTag'
@@ -31,12 +31,14 @@ import { Engine, type Focus, type GraphItem, type Item, type Pair, type Snapshot
 import {
   DEFAULT_FILTERS,
   monthOf,
+  normTag,
   SHARED,
   parseTags,
   shownRows,
   sinceOptions,
   stamp,
   tagCounts,
+  withTag,
   typeList,
   worldOptions,
   worldRows,
@@ -699,6 +701,34 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       },
     })
   }
+  // One meta area more on this one graph. The graph is read fresh first, because the server
+  // replaces the whole meta-area string; the tags it already has stay exactly as written.
+  function askMetaArea(g: GraphItem) {
+    setMenu(null)
+    const has = rowsRef.current.find((r) => r.id === g.id)?.tags || []
+    setDialog({
+      title: 'Add meta area',
+      text: `${has.length ? `“${g.title}” has ${has.join(' ')}.` : `“${g.title}” has no meta area.`} Type one to add, or choose from the list. The graph gets a new version.`,
+      input: '',
+      inputLabel: 'Meta area',
+      placeholder: '#METAAREA',
+      suggest: tags.map((t) => t[0]).filter((t) => !has.includes(t)),
+      ok: 'Add',
+      run: async (raw) => {
+        const tag = normTag(raw)
+        if (!tag) throw plain('Type a meta area or choose one from the list.')
+        const next = withTag(await readMetaArea(user, g.id), tag)
+        if (next == null) throw plain(`“${g.title}” already has ${tag}.`)
+        const stored = await writeMetaArea(user, g.id, next)
+        const rowsNext = rowsRef.current.map((r) => (r.id === g.id ? { ...r, tags: parseTags(stored) } : r))
+        writeCache(scope, user, rowsNext)
+        keep.current = true
+        setRows(rowsNext)
+        setDialog(null)
+        setNote(`${tag} added to “${g.title}”.`)
+      },
+    })
+  }
   // A graph moves into another World's own storage, from the shared storage or from the World it is in.
   // Id and links stay; the original goes to the trash of the store it came from for 30 days.
   function askMove(g: GraphItem) {
@@ -875,6 +905,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           x={menu.x}
           y={menu.y}
           onRename={() => askRename(menu.g)}
+          onMetaArea={() => askMetaArea(menu.g)}
           onDelete={() => askDelete(menu.g)}
           onMove={isSuperadmin(user) && worlds.some((w) => w !== menu.g.world) ? () => askMove(menu.g) : undefined}
           onShare={menu.g.world && !menu.g.sharedVia && worlds.some((w) => w !== menu.g.world) ? () => askShare(menu.g) : undefined}

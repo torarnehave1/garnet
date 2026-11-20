@@ -4,6 +4,10 @@ export interface DialogSpec {
   title: string
   text: string
   input?: string
+  // With input: what the field is (read aloud), a hint in the empty field, and names to choose among.
+  inputLabel?: string
+  placeholder?: string
+  suggest?: string[]
   // A choice instead of a text field: the value of the chosen option is passed to run.
   choices?: { value: string; label: string }[]
   ok?: string
@@ -53,7 +57,9 @@ export function Dialog({ spec, onClose, why }: { spec: DialogSpec; onClose: () =
             type="text"
             className="dlgInput"
             autoComplete="off"
-            aria-label="New title"
+            aria-label={spec.inputLabel || 'New title'}
+            placeholder={spec.placeholder}
+            list={spec.suggest ? 'dlgSuggest' : undefined}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
@@ -63,6 +69,13 @@ export function Dialog({ spec, onClose, why }: { spec: DialogSpec; onClose: () =
               }
             }}
           />
+        )}
+        {spec.suggest && (
+          <datalist id="dlgSuggest">
+            {spec.suggest.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
         )}
         {spec.choices && (
           <select className="dlgInput" aria-label="Choose" value={value} disabled={busy} onChange={(e) => setValue(e.target.value)}>

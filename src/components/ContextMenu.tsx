@@ -6,6 +6,7 @@ export function ContextMenu({
   x,
   y,
   onRename,
+  onMetaArea,
   onDelete,
   onMove,
   onShare,
@@ -14,6 +15,7 @@ export function ContextMenu({
   x: number
   y: number
   onRename: () => void
+  onMetaArea: () => void
   onDelete: () => void
   onMove?: () => void // only when the person may move graphs and there is a World to move to
   onShare?: () => void // only for a graph stored in a World, not one reached through a share
@@ -32,6 +34,9 @@ export function ContextMenu({
       <div className="ctxhead">{graph.title}</div>
       <button type="button" className="ctxitem" role="menuitem" onClick={onRename}>
         Rename graph…
+      </button>
+      <button type="button" className="ctxitem" role="menuitem" onClick={onMetaArea}>
+        Add meta area…
       </button>
       {onMove && (
         <button type="button" className="ctxitem" role="menuitem" onClick={onMove}>
