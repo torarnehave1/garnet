@@ -1489,7 +1489,7 @@ export class Engine {
     for (const g of this.graphs) {
       const h = g.hist
       if (!h || g.order >= kk) continue
-      const { gap, off } = this.histBox(h.lanes, g)
+      const { w, gap, off } = this.histBox(h.lanes, g)
       ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
       const x0 = g.x + g.r + off
       const top = g.y - ((h.lanes.length - 1) / 2) * gap
@@ -1504,6 +1504,8 @@ export class Engine {
         const txt = lane.length > 34 ? lane.slice(0, 33) + '…' : lane
         const tw = ctx.measureText(txt).width
         const right = Math.max(x0 - 3 / T.k, edge + tw)
+        // Past the end of the axis there is no row left to name.
+        if (right > x0 + w) return
         const y = top + i * gap
         if (right > x0 - 3 / T.k + 0.01) {
           const a = ctx.globalAlpha
