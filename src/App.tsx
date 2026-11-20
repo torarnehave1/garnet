@@ -798,6 +798,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       <div className="head">
         <Brand />
         <div className="stat">{stat}</div>
+        <div className="ver" title={`Built ${new Date(__BUILD_TIME__).toLocaleString()} from commit ${__BUILD_COMMIT__}`}>
+          Version {__BUILD_COMMIT__} · {new Date(__BUILD_TIME__).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </div>
         {canSearch && (
           <SearchBar active={searchQ} busy={searchBusy} found={found} error={searchErr} onSearch={setSearchQ} onClear={() => setSearchQ('')} />
         )}
