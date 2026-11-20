@@ -1156,8 +1156,23 @@ export class Engine {
         ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"
         const spread = T.k / this.zoom0 >= SPREAD_K
         const todo: NodeItem[] = []
+        const taken: [number, number, number, number][] = []
         for (const d of this.inner) {
           if (d.order >= kk) continue
+          if (d.hist) {
+            // A history node's name to the right of it; skipped where it would cover another.
+            // Click a node to read it in the card.
+            const txt = d.label.length > 34 ? d.label.slice(0, 33) + '…' : d.label
+            const x0 = d.x + d.r + 2 / T.k
+            const b: [number, number, number, number] = [x0, d.y - this.fs(9) * 0.6, x0 + ctx.measureText(txt).width, d.y + this.fs(9) * 0.6]
+            if (taken.some((t) => b[0] < t[2] && b[2] > t[0] && b[1] < t[3] && b[3] > t[1])) continue
+            taken.push(b)
+            ctx.globalAlpha = this.isNear(d) ? 0.85 : 0.06
+            ctx.textAlign = 'left'
+            ctx.fillText(txt, x0, d.y + this.fs(9) * 0.35)
+            ctx.textAlign = 'center'
+            continue
+          }
           if (spread && !d.flow) {
             todo.push(d)
             continue
@@ -1380,16 +1395,25 @@ export class Engine {
     ctx.textAlign = 'center'
   }
   // The history line's size on the map: wider and taller once zoomed in, so labels fit.
-  private histBox() {
+  private histBox(lanes: string[] = []) {
     const close = this.T.k >= 3
-    return { w: close ? 340 : 120, gap: close ? 9 : 4.5, off: close ? 30 : 10 }
+    let off = 10
+    if (close && lanes.length) {
+      // Room for the lane names between the graph's circle and the axis.
+      this.ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
+      off = Math.max(...lanes.map((l) => this.ctx.measureText(l.length > 34 ? l.slice(0, 33) + '…' : l).width)) + 12 / this.T.k
+    }
+    return { w: close ? 340 : 120, gap: close ? 9 : 4.5, off }
   }
   // History nodes follow their graph: x from the year, y from the lane.
   private placeHistory() {
-    const { w, gap, off } = this.histBox()
+    const boxes = new Map<string, ReturnType<Engine['histBox']>>()
     for (const d of this.inner) {
       const h = d.parent.hist
       if (!d.hist || !h) continue
+      let b = boxes.get(d.parent.id)
+      if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes)))
+      const { w, gap, off } = b
       const span = Math.max(1, h.y1 - h.y0)
       d.x = d.fx = d.parent.x + d.parent.r + off + ((d.hist.year - h.y0) / span) * w
       d.y = d.fy = d.parent.y + (d.hist.lane - (h.lanes.length - 1) / 2) * gap
@@ -1398,10 +1422,10 @@ export class Engine {
   // Faint lane lines, lane names on the left and decade marks above, once zoomed in.
   private drawHistoryAxes(kk: number) {
     const { ctx, T } = this
-    const { w, gap, off } = this.histBox()
     for (const g of this.graphs) {
       const h = g.hist
       if (!h || g.order >= kk) continue
+      const { w, gap, off } = this.histBox(h.lanes)
       const x0 = g.x + g.r + off
       const top = g.y - ((h.lanes.length - 1) / 2) * gap
       ctx.globalAlpha = this.isNear(g) ? 0.18 : 0.04
