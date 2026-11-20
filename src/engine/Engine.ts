@@ -1509,9 +1509,9 @@ export class Engine {
         const y = top + i * gap
         if (right > x0 - 3 / T.k + 0.01) {
           const a = ctx.globalAlpha
-          ctx.globalAlpha = 0.85
+          ctx.globalAlpha = 1
           ctx.fillStyle = '#0b1220'
-          ctx.fillRect(right - tw - 3 / T.k, y - this.fs(8) * 0.75, tw + 6 / T.k, this.fs(8) * 1.5)
+          ctx.fillRect(right - tw - 6 / T.k, y - this.fs(8) * 0.9, tw + 14 / T.k, this.fs(8) * 1.8)
           ctx.globalAlpha = a
           ctx.fillStyle = '#8fa0b8'
         }
