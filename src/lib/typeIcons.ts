@@ -44,6 +44,13 @@ import {
   type IconNode,
 } from 'lucide'
 
+// The letters PDF, drawn as strokes in the same 24 × 24 box as the Lucide icons (Lucide has none).
+const Pdf: IconNode = [
+  ['path', { d: 'M2.5 17V7h2.5a2.5 2.5 0 0 1 0 5H2.5' }],
+  ['path', { d: 'M9.5 7v10H11a3.5 5 0 0 0 0-10z' }],
+  ['path', { d: 'M17 17V7h4.5M17 12h3.5' }],
+]
+
 // One icon per node type, from Lucide (the icon set Knowledge Editor uses). A type that is not
 // listed is drawn as a plain dot, as before.
 const ICONS: Record<string, IconNode> = {
@@ -96,6 +103,9 @@ const ICONS: Record<string, IconNode> = {
   'ai-prompt': Sparkles,
   kursbeskrivelse: GraduationCap,
   'kurs-steg': GraduationCap,
+  // A course step by what it holds (iconKey in graphRules.ts): a video, or a PDF to download.
+  'kurs-steg/video': Play,
+  'kurs-steg/pdf': Pdf,
   kursmodul: GraduationCap,
   'kursmodul-2': GraduationCap,
   nyhetsbrev: Newspaper,

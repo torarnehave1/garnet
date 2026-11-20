@@ -2,7 +2,7 @@ import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY
 import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
-import { courseOrder, flowOrder, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
+import { courseOrder, flowOrder, iconKey, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
 import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, versionText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
@@ -54,6 +54,7 @@ export interface NodeItem extends Base {
   nid: string
   label: string
   type: string
+  icon: string // the key of the icon drawn in the node: the type, or finer for a course step
   parent: GraphItem
   order: number
   r: number
@@ -399,6 +400,7 @@ export class Engine {
             kind: 'n',
             label: nodeName(n.label),
             type: n.type || '',
+            icon: iconKey(n),
             parent: g,
             order: g.order,
             r: 1.8,
@@ -1085,7 +1087,7 @@ export class Engine {
       const sx = d.x * T.k + T.x
       const sy = d.y * T.k + T.y
       if (sx < -px || sy < -px || sx > W + px || sy > H + px) continue // outside the window
-      const icon = typeIcon(d.type)
+      const icon = typeIcon(d.icon)
       if (!icon) continue
       const s = (d.r * ICON_FILL * 2) / 24
       ctx.globalAlpha = this.isNear(d) ? 0.9 : 0.12

@@ -37,6 +37,18 @@ export function courseVideoUrl(node: Pick<KgNode, 'path'>): string | null {
   return url && /\.(mp4|m4v|mov|webm)(?:[?#].*)?$/i.test(url) ? url : null
 }
 
+// Which icon a node gets on the map: its type, except a course step (kurs-steg), which is told
+// apart by what it holds: a video ("kurs-steg/video"), a PDF to download ("kurs-steg/pdf"), or
+// text only (the plain type). Read from the node as it is; nothing is changed.
+export function iconKey(node: Pick<KgNode, 'type' | 'path' | 'info' | 'metadata'>): string {
+  const type = node.type || ''
+  if (type !== 'kurs-steg') return type
+  if (courseVideoUrl(node)) return type + '/video'
+  const lesson = (node.metadata as { lesson?: { pdf?: unknown } } | undefined)?.lesson
+  if (lesson?.pdf || /\]\(https?:\/\/[^)\s]+\.pdf(?:[?#][^)\s]*)?\)/i.test(String(node.info || ''))) return type + '/pdf'
+  return type
+}
+
 // The address of the sound file an audio node plays: its path, when that is an https address,
 // the same field Knowledge Editor plays it from. null otherwise.
 export function audioUrl(node: Pick<KgNode, 'path'>): string | null {
