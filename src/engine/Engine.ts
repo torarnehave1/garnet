@@ -1498,7 +1498,8 @@ export class Engine {
       ctx.textAlign = 'right'
       // When the axis is panned past the left edge, the lane names stay at that edge, on a dark
       // ground, so each row can still be told.
-      const edge = -T.x / T.k + 8 / T.k
+      // Right of the info panels on the left (about 360 px wide) on a wide screen.
+      const edge = (-T.x + (this.W > 900 ? 372 : 8)) / T.k
       h.lanes.forEach((lane, i) => {
         const txt = lane.length > 34 ? lane.slice(0, 33) + '…' : lane
         const tw = ctx.measureText(txt).width
