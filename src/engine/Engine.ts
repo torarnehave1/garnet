@@ -202,6 +202,12 @@ export class Engine {
   setPulse(counts: Map<string, number>) {
     this.pulse = counts
   }
+  // The nodes changed in the days the "Updated from" filter names, by graph id (lib/nodePulse.ts):
+  // each one pulses with the pulse layer. The map is filled in while it is read, so it is read live.
+  private nodePulse: Map<string, Set<string>> = new Map()
+  setNodePulse(by: Map<string, Set<string>>) {
+    this.nodePulse = by
+  }
   // The nodes a text search found, by graph id: ringed on the map. null: no search is on.
   private found: Map<string, Set<string>> | null = null
   setFound(found: Map<string, Set<string>> | null) {
@@ -1102,6 +1108,7 @@ export class Engine {
       }
     }
     if (pulseOn) this.drawPulse(kk, now)
+    if (this.pulseMode !== 'off' && !this.skeleton && this.detailOn && this.nodePulse.size) this.drawNodePulse(kk, now)
     this.drawShares(kk)
     this.hubs.forEach((d, i) => {
       if (!d.vis) return
@@ -1362,6 +1369,36 @@ export class Engine {
       ctx.globalAlpha = a
       ctx.strokeStyle = color
       ctx.stroke()
+    }
+  }
+  // A pulse on each node that was changed in the chosen days. Ripple: two rings travel out from
+  // the node. Beat: its ring beats. Colour and Version: a still ring. With reduced motion the ring
+  // stands still in every mode.
+  private drawNodePulse(kk: number, now: number) {
+    const { ctx, T } = this
+    const px = 1 / T.k
+    const ripple = this.pulseMode === 'ripple' && !this.reduced
+    const beating = this.pulseMode === 'beat' && !this.reduced
+    ctx.strokeStyle = PULSE_PLAIN
+    for (const d of this.inner) {
+      if (d.order >= kk || !this.nodePulse.get(d.parent.id)?.has(d.nid)) continue
+      const near = this.isNear(d) ? 0.95 : 0.15
+      const phase = (hash(d.parent.id + d.nid) % 1000) / 1000
+      const e = beating ? beat(now, 4, phase) : 0
+      const r0 = d.r * (d.flow ? 1.45 : 1) + 2.5 * px + e * 3 * px
+      ctx.lineWidth = 1.8 * px
+      ctx.globalAlpha = near * (beating ? 0.35 + 0.65 * e : 1)
+      ctx.beginPath()
+      ctx.arc(d.x, d.y, r0, 0, 6.2832)
+      ctx.stroke()
+      if (!ripple) continue
+      ctx.lineWidth = 1.3 * px
+      for (const p of ripples(now, 2, phase, false)) {
+        ctx.globalAlpha = near * (1 - p) * Math.min(1, p * 8)
+        ctx.beginPath()
+        ctx.arc(d.x, d.y, r0 + p * 14 * px, 0, 6.2832)
+        ctx.stroke()
+      }
     }
   }
   // Rings in water: n rings travel out from the graph and fade, so 12 changes is twelve rings at once.

@@ -1,9 +1,10 @@
 import { beatsPerMinute, PULSE_CAP, RIPPLE_SECONDS, PULSE_DAYS, PULSE_STEPS, pulseText, type PulseMode } from '../lib/pulse'
+import type { NodePulseSummary } from '../lib/useNodePulse'
 import type { PulseSummary } from '../lib/usePulse'
 
 // What the pulse layer shows, in words: how many graphs changed in the week and how often, how to
 // read the rings, and the three graphs with the most changes (a press shows one on the map).
-export function PulseBar({ mode, sum, onShow }: { mode: PulseMode; sum: PulseSummary | null; onShow: (id: string) => void }) {
+export function PulseBar({ mode, sum, nodes, onShow }: { mode: PulseMode; sum: PulseSummary | null; nodes: NodePulseSummary | null; onShow: (id: string) => void }) {
   if (mode === 'off' || !sum) return null
   const reading = !sum.done && sum.toRead > 0
   return (
@@ -51,6 +52,24 @@ export function PulseBar({ mode, sum, onShow }: { mode: PulseMode; sum: PulseSum
         <div className="pulseNote">
           One ring for each change, sent out like ripples in water: 2 is a small stir, 12 a wide wave. Each ring takes{' '}
           {RIPPLE_SECONDS} seconds to fade. Colour as in Colour.
+        </div>
+      )}
+      {nodes && (
+        <div className="pulseNote">
+          Nodes changed in the days chosen under “Updated from”:{' '}
+          {nodes.nodes ? (
+            <>
+              <b>{nodes.nodes.toLocaleString()}</b> in {nodes.graphs} {nodes.graphs === 1 ? 'graph' : 'graphs'}, each with its own pulse.
+            </>
+          ) : nodes.done ? (
+            'none found.'
+          ) : (
+            ''
+          )}
+          {!nodes.done && nodes.toRead > 0 && ` Comparing versions, ${nodes.read} of ${nodes.toRead}…`}
+          {nodes.capped > 0 && ` For ${nodes.capped}, the kept versions do not reach back to the first day, so earlier changes may be missing.`}
+          {nodes.failed > 0 && ` Versions not read for ${nodes.failed}.`}
+          {nodes.skipped > 0 && ` Worked out for the ${nodes.toRead} most recently changed graphs; narrow the filters to see the other ${nodes.skipped}.`}
         </div>
       )}
       {sum.top.length > 0 && (

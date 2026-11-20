@@ -23,6 +23,7 @@ import { iconKey } from './lib/graphRules'
 import { kOf, mapState, viewContext, viewLine, type MapState } from './lib/chatContext'
 import { PULSE_MODES, type PulseMode } from './lib/pulse'
 import { usePulse } from './lib/usePulse'
+import { useNodePulse } from './lib/useNodePulse'
 // React Flow is loaded only when a flow is opened.
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 const DiagramModal = lazy(() => import('./components/DiagramModal'))
@@ -413,6 +414,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     if (engine) engine.speed = +speed || 8
   }, [engine, speed])
   const pulse = usePulse(engine, user, shownNow, pulseMode)
+  // Nodes are drawn only with a meta area or a node type chosen; only then can a node pulse.
+  const nodePulse = useNodePulse(engine, user, shownNow, eff.updFrom, eff.updTo, pulseOn && !!(eff.tags.length || eff.type !== '*'))
 
   /* ---------- reading the graphs ---------- */
   const loadToken = useRef(0)
@@ -864,7 +867,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           <SearchBar active={searchQ} busy={searchBusy} found={found} error={searchErr} onSearch={setSearchQ} onClear={() => setSearchQ('')} />
         )}
         {sw.rate && <RateChart engine={engine} snap={snap} />}
-        <PulseBar mode={pulseMode} sum={pulse} onShow={showGraph} />
+        <PulseBar mode={pulseMode} sum={pulse} nodes={nodePulse} onShow={showGraph} />
         {note && (
           <div className="note">
             <span>{note}</span>{' '}

@@ -154,6 +154,8 @@ export function loadGraph(user: User, id: string): Promise<KgGraph> {
 export interface GraphHistory {
   stamps: number[]
   version: number | null
+  // Each kept version with the time it was written, for comparing two of them (lib/nodePulse.ts).
+  versions: { v: number; t: number }[]
 }
 const historyCache = new Map<string, { updated: string; stamps: Promise<GraphHistory> }>()
 export function loadHistory(user: User, id: string, updated: string): Promise<GraphHistory> {
@@ -166,13 +168,31 @@ export function loadHistory(user: User, id: string, updated: string): Promise<Gr
   }).then((h) => {
     const versions = h.versions || []
     const version = h.currentVersion ?? versions[0]?.version ?? null
-    return { stamps: versions.map((v) => utcMs(v.timestamp)).filter((t) => t > 0), version: typeof version === 'number' ? version : null }
+    return {
+      stamps: versions.map((v) => utcMs(v.timestamp)).filter((t) => t > 0),
+      version: typeof version === 'number' ? version : null,
+      versions: versions.map((v) => ({ v: v.version, t: utcMs(v.timestamp) })),
+    }
   })
   stamps.catch(() => {
     if (historyCache.get(key)?.stamps === stamps) historyCache.delete(key)
   })
   historyCache.set(key, { updated, stamps })
   return stamps
+}
+
+// The nodes of one saved version of a graph. A saved version never changes, so it is kept for the
+// session; per person, as the history is.
+const versionCache = new Map<string, Promise<KgGraph['nodes']>>()
+export function loadVersionNodes(user: User, id: string, version: number): Promise<KgGraph['nodes']> {
+  const key = user.email + '|' + id + '|' + version
+  let p = versionCache.get(key)
+  if (!p) {
+    p = mcpCall<{ nodes?: KgGraph['nodes'] }>(user, 'get_graph_version', { graphId: id, version }).then((g) => (Array.isArray(g.nodes) ? g.nodes : []))
+    p.catch(() => versionCache.delete(key))
+    versionCache.set(key, p)
+  }
+  return p
 }
 
 // History lines (graph type history-line, registered 2026-11-20): the graphs that hold a
