@@ -37,6 +37,22 @@ function simulatedMembers(w: KgNode): Map<string, number> {
   return out
 }
 
+// Connections between members (architect's ask 2026-11-20): the virtual-world node keeps them in
+// metadata.connections as [{ a, b, perWeek }], a and b being member node ids. perWeek is how many
+// exchanges a week the connection carries (for instance e-mail threads); the map draws a line
+// with a pulse that travels faster for a higher number.
+function connections(w: KgNode): { a: string; b: string; perWeek: number }[] {
+  const list = (w.metadata as { connections?: unknown } | undefined)?.connections
+  if (!Array.isArray(list)) return []
+  const out: { a: string; b: string; perWeek: number }[] = []
+  for (const c of list as Record<string, unknown>[]) {
+    if (!c || typeof c.a !== 'string' || typeof c.b !== 'string' || c.a === c.b) continue
+    const n = typeof c.perWeek === 'number' && Number.isFinite(c.perWeek) && c.perWeek > 0 ? c.perWeek : 0
+    if (n) out.push({ a: c.a, b: c.b, perWeek: n })
+  }
+  return out
+}
+
 /**
  * The Virtual Worlds one graph defines, and their members as rows for the map.
  * `base` is the defining graph's own created and updated time: a member has none of its own.
@@ -74,6 +90,13 @@ export function virtualRows(graphId: string, base: { created: string; updated: s
         version: null,
         virtual: { graphId, nodeId: m.id, ...(sim.has(m.id) ? { members: sim.get(m.id) } : {}) },
       })
+    }
+    // A connection is kept on its first member's row, and only when both ends are members.
+    const rowId = (id: string) => `vw:${graphId}:${w.id}:${id}`
+    for (const c of connections(w)) {
+      if (!seen.has(c.a) || !seen.has(c.b)) continue
+      const row = rows.find((r) => r.id === rowId(c.a))
+      if (row?.virtual) (row.virtual.links ||= []).push({ to: rowId(c.b), perWeek: c.perWeek })
     }
   }
   return { worlds, rows }

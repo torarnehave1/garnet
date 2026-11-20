@@ -24,7 +24,9 @@ export interface Row {
   // virtual-world node in the graph `graphId`; `nodeId` is the member's own node there.
   // `members` is a simulated member number the Virtual World gives this member: an invented
   // number, never a real one. It sets the circle's size and is written after the name.
-  virtual?: { graphId: string; nodeId: string; members?: number }
+  // `links` are this member's connections to other members of the same World (the other member's
+  // row id, and how many exchanges a week the connection carries): a line with a pulse on the map.
+  virtual?: { graphId: string; nodeId: string; members?: number; links?: { to: string; perWeek: number }[] }
 }
 export type ShareMode = 'read' | 'write'
 

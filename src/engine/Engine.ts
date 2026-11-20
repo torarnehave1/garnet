@@ -49,7 +49,7 @@ export interface GraphItem extends Base {
   sharedMode?: 'read' | 'write'
   sharedWith?: { world: string; mode: 'read' | 'write' }[]
   // A member of a Virtual World: drawn with a dashed ring, and it does not exist on the server.
-  virtual?: { graphId: string; nodeId: string; members?: number }
+  virtual?: { graphId: string; nodeId: string; members?: number; links?: { to: string; perWeek: number }[] }
 }
 export interface NodeItem extends Base {
   kind: 'n'
@@ -79,6 +79,10 @@ const SHARE_MIN_PX = 7
 const SHARE_COLOR = '#c9a2f2'
 
 type Link<S extends Item = Item, T extends Item = Item> = SimulationLinkDatum<Item> & { source: S; target: T }
+// A connection between two members of a Virtual World: a line with a pulse travelling along it.
+interface VirtLink extends Link<GraphItem, GraphItem> {
+  perWeek: number
+}
 interface SemLink extends Link<GraphItem, GraphItem> {
   word: string
 }
@@ -152,6 +156,7 @@ export class Engine {
   private nodes: Item[] = []
   private metaLinks: Link<GraphItem, Hub>[] = []
   private semLinks: SemLink[] = []
+  private virtLinks: VirtLink[] = []
   private containLinks: Link<NodeItem, GraphItem>[] = []
   private innerLinks: Link<NodeItem, NodeItem>[] = []
   private flowLinks: FlowLink[] = []
@@ -348,6 +353,15 @@ export class Engine {
         }
       })
     })
+    // Connections between members of a Virtual World (lib/virtual.ts).
+    this.virtLinks = []
+    const byRow = new Map(graphs.map((g) => [g.id, g]))
+    for (const g of graphs) {
+      for (const l of g.virtual?.links || []) {
+        const to = byRow.get(l.to)
+        if (to) this.virtLinks.push({ source: g, target: to, perWeek: l.perWeek })
+      }
+    }
     this.semLinks = []
     const pair = new Set<string>()
     words.forEach((wl, w) => {
@@ -480,6 +494,7 @@ export class Engine {
       .force('contain', forceLink<Item, Link>(this.containLinks).distance(16).strength(0.8))
       .force('inner', forceLink<Item, Link>(this.innerLinks).distance(12).strength(0.2))
       .force('sem', forceLink<Item, Link>(this.semLinks).distance(70).strength(0.04))
+      .force('virt', forceLink<Item, Link>(this.virtLinks).distance(60).strength(0.05))
       .force(
         'charge',
         forceManyBody<Item>()
@@ -866,6 +881,8 @@ export class Engine {
         line(l.source, l.target)
       }
     }
+    this.drawVirtLinks(kk, now)
+    ctx.lineWidth = 0.6 / Math.sqrt(T.k)
     if (this.showMeta) {
       for (const l of this.metaLinks) {
         if (l.source.order >= kk) continue
@@ -1015,10 +1032,10 @@ export class Engine {
     // their simulated member number is written inside the circle as soon as the circle is large
     // enough on screen to hold it, and their name below once zoomed in.
     for (const d of this.graphs) {
-      const m = d.virtual?.members
-      if (m == null || d.order >= kk) continue
+      if (!d.virtual || d.order >= kk) continue
+      const m = d.virtual.members
       ctx.globalAlpha = this.isNear(d) ? 1 : 0.15
-      if (d.r * T.k >= 6) {
+      if (m != null && d.r * T.k >= 6) {
         const txt = String(m)
         ctx.font = '600 ' + d.r * (txt.length > 2 ? 0.8 : 1) + "px 'IBM Plex Sans',system-ui,sans-serif"
         ctx.fillStyle = '#0b1220'
@@ -1066,6 +1083,45 @@ export class Engine {
     }
     if (this.pulseMode === 'count' && !this.skeleton) this.drawPulseCounts(kk)
     ctx.globalAlpha = 1
+  }
+  // Connections between members of a Virtual World: a rose line, thicker for more exchanges a
+  // week, with a point of light travelling from one member to the other and back. One exchange
+  // a week takes six seconds to cross; more a week crosses faster. With reduced motion the point
+  // rests in the middle. The number a week is written at the middle once zoomed in.
+  private drawVirtLinks(kk: number, now: number) {
+    if (!this.virtLinks.length) return
+    const { ctx, T } = this
+    const px = 1 / T.k
+    const sel = this.selected
+    ctx.save()
+    for (const l of this.virtLinks) {
+      const a = l.source
+      const b = l.target
+      if (a.order >= kk || b.order >= kk) continue
+      const lit = !sel || a === sel || b === sel
+      ctx.globalAlpha = lit ? 0.75 : 0.08
+      ctx.strokeStyle = PULSE_PLAIN
+      ctx.lineWidth = Math.min(4, 0.8 + l.perWeek * 0.7) * px
+      ctx.beginPath()
+      ctx.moveTo(a.x, a.y)
+      ctx.lineTo(b.x, b.y)
+      ctx.stroke()
+      const period = 6000 / Math.max(0.2, l.perWeek)
+      const u = this.reduced ? 0.5 : ((now + (hash(a.id + b.id) % 1000)) % (period * 2)) / period
+      const t = u <= 1 ? u : 2 - u
+      ctx.globalAlpha = lit ? 1 : 0.1
+      ctx.fillStyle = '#ffd5df'
+      ctx.beginPath()
+      ctx.arc(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 3.2 * px, 0, 6.2832)
+      ctx.fill()
+      if (T.k >= 1.5) {
+        ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"
+        ctx.textAlign = 'center'
+        ctx.fillStyle = '#ffa3ba'
+        ctx.fillText(`${Math.round(l.perWeek * 10) / 10} a week`, (a.x + b.x) / 2, (a.y + b.y) / 2 - 4 * px)
+      }
+    }
+    ctx.restore()
   }
   // Every World a graph is shared with: one small square to the left of the graph, tied to it by a
   // dashed line, the World's address beside it once zoomed in close (Tor Arne, 2026-11-19: "a small
