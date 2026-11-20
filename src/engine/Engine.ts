@@ -1094,11 +1094,14 @@ export class Engine {
     const { ctx, T } = this
     const px = 1 / T.k
     const sel = this.selected
+    const sum = new Map<GraphItem, number>()
     ctx.save()
     for (const l of this.virtLinks) {
       const a = l.source
       const b = l.target
       if (a.order >= kk || b.order >= kk) continue
+      sum.set(a, (sum.get(a) || 0) + l.perWeek)
+      sum.set(b, (sum.get(b) || 0) + l.perWeek)
       const lit = !sel || a === sel || b === sel
       ctx.globalAlpha = lit ? 0.75 : 0.08
       ctx.strokeStyle = PULSE_PLAIN
@@ -1122,6 +1125,9 @@ export class Engine {
         ctx.fillText(`${Math.round(l.perWeek * 10) / 10} a week`, (a.x + b.x) / 2, (a.y + b.y) / 2 - 4 * px)
       }
     }
+    // The pulse itself, as in the Body Pulse view of "What are we?": rings that expand out from
+    // each member a connection touches, one ring for each exchange a week across its connections.
+    for (const [d, n] of sum) this.drawRipple(d, Math.max(1, Math.round(n)), now)
     ctx.restore()
   }
   // Every World a graph is shared with: one small square to the left of the graph, tied to it by a
