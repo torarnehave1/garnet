@@ -66,7 +66,9 @@ export function worldsOf(r: Row): string[] {
 }
 
 export function worldRows(rows: Row[], world: string): Row[] {
-  return world === '*' ? rows : rows.filter((r) => worldsOf(r).includes(world))
+  // A Virtual World is not real: its members are shown only when that World itself is chosen,
+  // never among the real graphs under "All" (architect 2026-11-20).
+  return world === '*' ? rows.filter((r) => !r.virtual) : rows.filter((r) => worldsOf(r).includes(world))
 }
 
 // Every World the person can use is listed, also one with no graphs yet (count 0).
@@ -76,7 +78,7 @@ export function worldOptions(rows: Row[], worlds: string[] = []): Option[] {
   rows.forEach((r) => worldsOf(r).forEach((w) => count.set(w, (count.get(w) || 0) + 1)))
   worlds.forEach((w) => w && !count.has(w) && count.set(w, 0))
   const names = Array.from(count.keys()).sort()
-  const out: Option[] = [{ value: '*', label: `All (${rows.length})` }]
+  const out: Option[] = [{ value: '*', label: `All (${rows.filter((r) => !r.virtual).length})` }]
   if (names.length > 1) names.forEach((w) => out.push({ value: w, label: `${w || SHARED} (${count.get(w)})` }))
   return out
 }

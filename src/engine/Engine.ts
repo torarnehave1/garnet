@@ -48,6 +48,8 @@ export interface GraphItem extends Base {
   sharedVia?: string // reached only through a share with this World of the viewer's
   sharedMode?: 'read' | 'write'
   sharedWith?: { world: string; mode: 'read' | 'write' }[]
+  // A member of a Virtual World: drawn with a dashed ring, and it does not exist on the server.
+  virtual?: { graphId: string; nodeId: string }
 }
 export interface NodeItem extends Base {
   kind: 'n'
@@ -277,6 +279,7 @@ export class Engine {
       sharedVia: g.sharedVia,
       sharedMode: g.sharedMode,
       sharedWith: g.sharedWith,
+      virtual: g.virtual,
       x: 0,
       y: 0,
     }))
@@ -953,6 +956,17 @@ export class Engine {
       ctx.beginPath()
       ctx.arc(d.x, d.y, r, 0, 6.2832)
       ctx.fill()
+      if (d.virtual) {
+        // Not a real graph: a dashed ring round it, so a Virtual World is never read as a real one.
+        ctx.save()
+        ctx.strokeStyle = '#e8eef7'
+        ctx.lineWidth = 1 / T.k
+        ctx.setLineDash([3 / T.k, 2.5 / T.k])
+        ctx.beginPath()
+        ctx.arc(d.x, d.y, r + 2.2 / T.k, 0, 6.2832)
+        ctx.stroke()
+        ctx.restore()
+      }
       const z = T.k / this.zoom0
       if (d.header && z > HEADER_FROM_Z && !fresh) {
         // Zoomed in: the header image fills the circle, inside a rim of the graph's colour.

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearUser, completeMagicLink, isSuperadmin, magicInUrl, readUser } from './api/auth'
 import { Recorder } from './components/Recorder'
-import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, moveGraphToWorld, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph } from './api/kg'
+import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, loadVirtualWorlds, moveGraphToWorld, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { BulkTag } from './components/BulkTag'
@@ -136,7 +136,8 @@ function writeWorlds(user: User | null, worlds: string[]) {
 }
 function writeCache(scope: Scope, user: User | null, rows: Row[]) {
   try {
-    localStorage.setItem(rowsKey(scope, user), JSON.stringify({ at: Date.now(), rows }))
+    // Virtual World members are read fresh each time and are never part of the saved copy.
+    localStorage.setItem(rowsKey(scope, user), JSON.stringify({ at: Date.now(), rows: rows.filter((r) => !r.virtual) }))
   } catch {
     /* storage full or blocked */
   }
@@ -316,7 +317,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     if (!canSearch && searchQ) setSearchQ('')
   }, [canSearch, searchQ])
   // The graphs to search: what the filters show. A changed map is searched again.
-  const searchIds = useMemo(() => (searchQ ? shownRows(rows, eff).map((r) => r.id).join(',') : ''), [searchQ, rows, eff])
+  const searchIds = useMemo(() => (searchQ ? shownRows(rows, eff).filter((r) => !r.virtual).map((r) => r.id).join(',') : ''), [searchQ, rows, eff])
   useEffect(() => {
     setSearchErr('')
     if (!searchQ) {
@@ -357,7 +358,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   // The graphs the map draws now, for the pulse layer (the drawing effect below works out its own).
   const pulseOn = pulseMode !== 'off'
   // eslint-disable-next-line react-hooks/exhaustive-deps -- shownFor reads found through a ref
-  const shownNow = useMemo(() => (pulseOn ? shownFor(rows, eff) : NO_ROWS), [pulseOn, rows, eff, found])
+  // Virtual World members have no version history on the server, so the pulse layer leaves them out.
+  const shownNow = useMemo(() => (pulseOn ? shownFor(rows, eff).filter((r) => !r.virtual) : NO_ROWS), [pulseOn, rows, eff, found])
   const rowsRef = useRef(rows)
   rowsRef.current = rows
   const userRef = useRef(user)
@@ -383,7 +385,10 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         // A clicked node of a type with a rule opens by its own renderer; any other choice closes it.
         setPreview(view && !asDiagram && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, world: d.parent.world, title: d.label, type: d.type, full: view === 'full' } : null)
       },
-      onContext: (g, x, y) => setMenu({ g, x, y }),
+      // A Virtual World member is not a graph on the server: nothing to rename, delete, move or share.
+      onContext: (g, x, y) => {
+        if (!g.virtual) setMenu({ g, x, y })
+      },
       onZoom: setZoomZ,
       onFocus: (focus) => storeView({ f: effRef.current, focus }),
       onUserMove: () => (focusWant.current = null),
@@ -416,12 +421,21 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     try {
       const { rows: got, worlds: ws } = await loadIndex(u, sc)
       if (mine !== loadToken.current) return
+      // Virtual Worlds are read after the real graphs and kept apart from the saved copy. When they
+      // cannot be read, the real graphs are shown without them.
+      let virt: { rows: Row[]; worlds: string[] } = { rows: [], worlds: [] }
+      try {
+        if (u) virt = await loadVirtualWorlds(u, sc)
+      } catch {
+        /* no Virtual Worlds this time */
+      }
+      if (mine !== loadToken.current) return
       writeCache(sc, u, got)
       writeWorlds(u, ws)
-      setWorlds(ws)
+      setWorlds([...ws, ...virt.worlds])
       setFreshness('read ' + stamp(Date.now()))
       keep.current = true
-      setRows(got)
+      setRows([...got, ...virt.rows])
       setLoaded(true)
     } catch (e) {
       if (mine !== loadToken.current) return
@@ -478,6 +492,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     }
     settle()
     if (!f.tags.length && !ty) return
+    // Virtual World members hold no nodes on the server: nothing to ask for.
+    if (shown.every((r) => r.virtual)) return
     // One request per chosen meta area (a graph under two of them is fetched twice). With only a
     // node type chosen: one request for every graph that holds that type, in any meta area.
     setNodeNote('loading nodes…')
@@ -486,7 +502,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     const asks = f.tags.length ? f.tags : ['']
     // Ask for the graphs that are SHOWN, not for everything the meta area or node type covers:
     // the other filters (World, dates, published …) have already made the selection small.
-    const ids = shown.map((r) => r.id)
+    const ids = shown.filter((r) => !r.virtual).map((r) => r.id)
     Promise.all(asks.map((tag) => loadNodes(u, sc, tag, ty, ids)))
       .then((parts) => {
         if (mine !== renderToken.current) return
@@ -836,7 +852,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       {bulkOpen && (
         <BulkTag
           user={user}
-          rows={shownFor(rows, eff)}
+          rows={shownFor(rows, eff).filter((r) => !r.virtual)}
           tags={tags.map((t) => t[0])}
           why={why}
           onClose={() => setBulkOpen(false)}

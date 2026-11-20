@@ -30,7 +30,8 @@ function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; 
 }
 
 export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
-  const editor = useEditorBase(item?.kind === 'g' ? item.world : item?.kind === 'n' ? item.parent.world : '')
+  // A Virtual World has no editor of its own: its defining graph opens in the platform editor.
+  const editor = useEditorBase(item?.kind === 'g' ? (item.virtual ? '' : item.world) : item?.kind === 'n' ? item.parent.world : '')
   if (!item) return null
   let title = ''
   let meta = ''
@@ -44,6 +45,12 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
     meta = 'Node' + (item.type ? ' of type ' + item.type : '') + ' in the graph ' + item.parent.title + (item.links.length ? ` · ${item.links.length} edges` : '')
     body = <NodeText graphId={item.parent.id} nodeId={item.nid} user={user} />
     link = { href: viewLink(editor, item.parent.id), text: 'Open Knowledge Graph' }
+  } else if (item.virtual) {
+    // A member of a Virtual World: not a graph on the server, only a node in the defining graph.
+    title = item.title
+    meta = `Member of the Virtual World ${item.world.replace(/ \(virtual\)$/, '')}. This World is not real: it is defined in a knowledge graph and has no account of its own.` + (item.tags.length ? ' · ' + item.tags.join(' ') : '')
+    body = <NodeText graphId={item.virtual.graphId} nodeId={item.virtual.nodeId} user={user} />
+    link = { href: viewLink(editor, item.virtual.graphId), text: 'Open the graph that defines this Virtual World' }
   } else {
     const d = item
     title = d.title

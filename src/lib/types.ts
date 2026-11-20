@@ -20,6 +20,9 @@ export interface Row {
   sharedVia?: string // reached only because it is shared with this World of mine
   sharedMode?: ShareMode // with sharedVia: may I change it
   sharedWith?: { world: string; mode: ShareMode }[] // every World it is shared with
+  // A member of a Virtual World (lib/virtual.ts): not a graph on the server. It is read from a
+  // virtual-world node in the graph `graphId`; `nodeId` is the member's own node there.
+  virtual?: { graphId: string; nodeId: string }
 }
 export type ShareMode = 'read' | 'write'
 

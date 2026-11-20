@@ -1,6 +1,7 @@
 import type { KgGraph, Row, Scope, ShareMode, User } from '../lib/types'
 import { utcMs } from '../lib/pulse'
 import { parseTags } from '../lib/rows'
+import { VIRTUAL_TYPE, virtualRows } from '../lib/virtual'
 import { mcpCall } from './mcp'
 
 // Every read and write goes through the MCP server as the signed-in person. The server decides
@@ -172,6 +173,31 @@ export function loadHistory(user: User, id: string, updated: string): Promise<Gr
   })
   historyCache.set(key, { updated, stamps })
   return stamps
+}
+
+// Virtual Worlds (architect 2026-11-20): Worlds that are defined in a knowledge graph and have no
+// Cloudflare account. Every graph the person can see that holds a virtual-world node is read once;
+// each such node is one World, and the nodes it has an edge to are its members (lib/virtual.ts).
+export async function loadVirtualWorlds(user: User, scope: Scope): Promise<{ rows: Row[]; worlds: string[] }> {
+  const a = await mcpCall<IndexAnswer>(user, 'graph_index', { scope, nodeType: VIRTUAL_TYPE })
+  const out: { rows: Row[]; worlds: string[] } = { rows: [], worlds: [] }
+  const parts = await Promise.all(
+    (a.graphs || [])
+      .filter((g) => g && g.graphId)
+      .map(async (g) => {
+        try {
+          return virtualRows(g.graphId, { created: g.createdAt || '', updated: g.updatedAt || '' }, await loadGraph(user, g.graphId))
+        } catch {
+          return null // one unreadable definition does not hide the others
+        }
+      }),
+  )
+  for (const p of parts) {
+    if (!p) continue
+    for (const w of p.worlds) if (!out.worlds.includes(w)) out.worlds.push(w)
+    out.rows.push(...p.rows)
+  }
+  return out
 }
 
 export function clearCaches() {

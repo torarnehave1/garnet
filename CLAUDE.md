@@ -9,6 +9,7 @@ Source of the design: graph `1959d5a5-a291-4916-bac1-63aa2cead59c` (handover nod
 ## Layout
 - `src/engine/Engine.ts` — canvas, d3-force simulation, zoom, picking, drawing. No React.
 - `src/lib/` — pure rules: filters and options (`rows.ts`), flow/task order, YouTube names, task status, node text (`graphRules.ts`), the pulse layer's window, colour steps and beat (`pulse.ts`; `usePulse.ts` reads the version history for it).
+- `src/lib/virtual.ts` — Virtual Worlds: a `virtual-world` node in a graph is one World that is not real; the nodes it has an edge to are its members, shown as circles in a World of their own. They are not graphs on the server: no menu, search, pulse or bulk tagging for them.
 - `src/api/` — `auth.ts` (`<vegvisr-auth>`, localStorage `vegvisr_user`), `kg.ts` (knowledge.vegvisr.org calls).
 - `src/components/` — UI around the canvas. `src/App.tsx` wires state, filters, view memory and actions.
 
