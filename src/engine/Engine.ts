@@ -991,7 +991,9 @@ export class Engine {
       ctx.strokeStyle = '#e8eef7'
       for (const l of this.innerLinks) {
         if (l.source.order >= kk) continue
-        ctx.globalAlpha = sel ? (touches(l) ? 0.9 : 0.04) : 0.4
+        // On a history line the "grew into" lines stay faint so they do not cut through the names.
+        const hl = l.source.hist && l.target.hist
+        ctx.globalAlpha = sel ? (touches(l) ? 0.9 : 0.04) : hl ? 0.14 : 0.4
         line(l.source, l.target)
       }
       this.drawHistoryAxes(kk)
@@ -1156,20 +1158,31 @@ export class Engine {
         ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"
         const spread = T.k / this.zoom0 >= SPREAD_K
         const todo: NodeItem[] = []
-        const taken: [number, number, number, number][] = []
+        // For each history node: where the next event in the same lane stands.
+        const histNext = new Map<NodeItem, number>()
+        const byLane = new Map<string, NodeItem[]>()
+        for (const d of this.inner) {
+          if (!d.hist || d.order >= kk) continue
+          const key = d.parent.id + '|' + d.hist.lane
+          const list = byLane.get(key)
+          if (list) list.push(d)
+          else byLane.set(key, [d])
+        }
+        for (const list of byLane.values()) {
+          list.sort((a, b) => a.x - b.x)
+          for (let i = 0; i < list.length - 1; i++) histNext.set(list[i], list[i + 1].x - list[i + 1].r)
+        }
         for (const d of this.inner) {
           if (d.order >= kk) continue
           if (d.hist) {
-            // A history node's name to the right of it; skipped where it would cover another.
-            // Click a node to read it in the card.
-            const txt = d.label.length > 34 ? d.label.slice(0, 33) + '…' : d.label
-            const x0 = d.x + d.r + 2 / T.k
-            const b: [number, number, number, number] = [x0, d.y - this.fs(9) * 0.6, x0 + ctx.measureText(txt).width, d.y + this.fs(9) * 0.6]
-            if (taken.some((t) => b[0] < t[2] && b[2] > t[0] && b[1] < t[3] && b[3] > t[1])) continue
-            taken.push(b)
+            // A history node's name to the right of it, cut to the room before the next event in
+            // its lane; left out when not even the year fits. Click a node to read it whole.
+            const room = (histNext.get(d) ?? Infinity) - d.x - d.r - 5 / T.k
+            const txt = this.fitText(d.label, room)
+            if (!txt) continue
             ctx.globalAlpha = this.isNear(d) ? 0.85 : 0.06
             ctx.textAlign = 'left'
-            ctx.fillText(txt, x0, d.y + this.fs(9) * 0.35)
+            ctx.fillText(txt, d.x + d.r + 2 / T.k, d.y + this.fs(9) * 0.35)
             ctx.textAlign = 'center'
             continue
           }
@@ -1403,7 +1416,7 @@ export class Engine {
       this.ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
       off = Math.max(...lanes.map((l) => this.ctx.measureText(l.length > 34 ? l.slice(0, 33) + '…' : l).width)) + 12 / this.T.k
     }
-    return { w: close ? 340 : 120, gap: close ? 9 : 4.5, off }
+    return { w: close ? 340 * Math.pow(this.T.k / 3, 0.6) : 120, gap: close ? 9 : 4.5, off }
   }
   // History nodes follow their graph: x from the year, y from the lane.
   private placeHistory() {
@@ -1453,6 +1466,22 @@ export class Engine {
       ctx.textAlign = 'center'
     }
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)
+  }
+  // The longest start of a label that fits the width (the font already set), with … when cut.
+  // Empty when not even the first word (the year, on a history line) fits.
+  private fitText(label: string, room: number) {
+    const m = (t: string) => this.ctx.measureText(t).width
+    if (m(label) <= room) return label
+    const first = label.split(' ')[0]
+    if (m(first) > room) return ''
+    let lo = first.length
+    let hi = label.length
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (m(label.slice(0, mid).trimEnd() + '…') <= room) lo = mid
+      else hi = mid - 1
+    }
+    return lo >= label.length ? label : label.slice(0, lo).trimEnd() + (lo > first.length ? '…' : '')
   }
   private flowText(d: NodeItem) {
     const lab = d.label.length > 44 ? d.label.slice(0, 43) + '…' : d.label
