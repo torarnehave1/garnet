@@ -508,6 +508,17 @@ export class Engine {
     for (const o of this.inner) if (o.type === 'oppgave' && o.parent.id === graphId) o.status = statusKind(byNode[o.nid])
   }
 
+  // A course step's icon is told from the node's own data (its video address, its PDF), which the
+  // node index does not carry either. Course graphs are read whole afterwards and the icons set here.
+  graphsWithCourseSteps(): string[] {
+    const ids = new Set<string>()
+    for (const o of this.inner) if (o.type === COURSE_TYPE) ids.add(o.parent.id)
+    return [...ids]
+  }
+  setNodeIcons(graphId: string, byNode: Record<string, string>) {
+    for (const o of this.inner) if (o.type === COURSE_TYPE && o.parent.id === graphId && byNode[o.nid]) o.icon = byNode[o.nid]
+  }
+
   /* ---------- time ---------- */
   setK(v: number) {
     this.k = Math.max(0, Math.min(this.N, v))

@@ -19,6 +19,7 @@ import { readLang, T } from './lib/lang'
 import { RateChart } from './components/RateChart'
 import { TagPanel } from './components/TagPanel'
 import { isFlowGraph } from './lib/flow'
+import { iconKey } from './lib/graphRules'
 import { kOf, mapState, viewContext, viewLine, type MapState } from './lib/chatContext'
 import { PULSE_MODES, type PulseMode } from './lib/pulse'
 import { usePulse } from './lib/usePulse'
@@ -502,6 +503,16 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
               const by: Record<string, unknown> = {}
               for (const n of g.nodes) if (n.metadata && n.metadata.status != null) by[n.id] = n.metadata.status
               engine.setTaskStatus(id, by)
+            })
+            .catch(() => {})
+        // Course step icons (video, PDF or text): read each course graph once, the same way.
+        for (const id of engine.graphsWithCourseSteps())
+          loadGraph(u, id)
+            .then((g) => {
+              if (mine !== renderToken.current) return
+              const by: Record<string, string> = {}
+              for (const n of g.nodes) if (n.type === 'kurs-steg') by[n.id] = iconKey(n)
+              engine.setNodeIcons(id, by)
             })
             .catch(() => {})
       })
