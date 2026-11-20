@@ -183,7 +183,10 @@ export function textHtml(node: KgNode): string {
   ;(cut ? info.slice(0, 2400) : info).split(/\n\s*\n/).forEach((par) => {
     const p = esc(par.trim().replace(/^#{1,6}\s*/gm, ''))
     if (!p) return
-    h += '<p>' + p.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*\n]+)\*/g, '<i>$1</i>').replace(/\n/g, '<br>') + '</p>'
+    // A Markdown link [text](https://…) becomes a link that opens in a new tab. The text is escaped
+    // above, so the address cannot break out of its attribute; only http(s) addresses are taken.
+    const linked = p.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    h += '<p>' + linked.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*\n]+)\*/g, '<i>$1</i>').replace(/\n/g, '<br>') + '</p>'
   })
   if (cut) h += '<p>… The text continues in the graph.</p>'
   if (ex.by)
