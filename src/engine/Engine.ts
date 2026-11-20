@@ -119,10 +119,20 @@ export interface Focus {
   z: number
 }
 
+// Two selected members of a Virtual World and the tie between them, for the card.
+export interface Pair {
+  a: GraphItem
+  b: GraphItem
+  perWeek: number | null // the tie's exchanges a week; null: no tie is defined between the two
+  pulseA: number
+  pulseB: number
+}
 export interface EngineEvents {
   onSnapshot(s: Snapshot): void
   // byUser: the item was clicked, not put back by a restored view.
   onSelect(d: Item | null, byUser?: boolean): void
+  // Two members of a Virtual World are selected together: what ties them. null: no pair.
+  onPair?(p: Pair | null): void
   onContext(g: GraphItem, clientX: number, clientY: number): void
   onZoom(z: number): void
   onFocus(f: Focus): void
@@ -201,6 +211,22 @@ export class Engine {
   }
 
   selected: Item | null = null
+  // A second member of the same Virtual World, selected with Shift-click or after pickSecond():
+  // only the two and the tie between them stay lit.
+  second: GraphItem | null = null
+  private secondNext = false
+  /** The next click on another member of the same Virtual World selects it as the second. */
+  pickSecond() {
+    this.secondNext = true
+  }
+  private selectSecond(d: GraphItem) {
+    const a = this.selected
+    if (!a || a.kind !== 'g') return
+    this.second = d
+    this.near = new Set<Item>([d])
+    const l = this.virtLinks.find((v) => (v.source === a && v.target === d) || (v.source === d && v.target === a))
+    this.ev.onPair?.({ a, b: d, perWeek: l ? l.perWeek : null, pulseA: this.pulseN(a.id) || 0, pulseB: this.pulseN(d.id) || 0 })
+  }
   private near: Set<Item> | null = null
   private fitToken = 0
   viewSet = false
@@ -697,6 +723,11 @@ export class Engine {
   select(d: Item | null, byUser = false) {
     this.selected = d
     this.near = null
+    this.secondNext = false
+    if (this.second) {
+      this.second = null
+      this.ev.onPair?.(null)
+    }
     if (d) {
       const near = new Set<Item>()
       if (d.kind === 'h') d.members.forEach((g) => near.add(g))
@@ -766,6 +797,13 @@ export class Engine {
         return
       }
       const d = this.pick(e.clientX, e.clientY)
+      const first = this.selected
+      // A second member of the same Virtual World: Shift-click, or the click after pickSecond().
+      if ((e.shiftKey || this.secondNext) && d && d.kind === 'g' && d.virtual && first && first.kind === 'g' && first.virtual && d !== first && d.world === first.world) {
+        this.secondNext = false
+        this.selectSecond(d)
+        return
+      }
       this.select(d, true)
       this.nudge(d)
     })
@@ -891,7 +929,7 @@ export class Engine {
       ctx.strokeStyle = '#cfe0ff'
       for (const l of this.semLinks) {
         if (l.source.order >= kk || l.target.order >= kk) continue
-        ctx.globalAlpha = sel ? (touches(l) ? 0.8 : 0.03) : 0.13
+        ctx.globalAlpha = sel ? (touches(l) && !this.second ? 0.8 : 0.03) : 0.13
         line(l.source, l.target)
       }
     }
@@ -1114,7 +1152,8 @@ export class Engine {
       const a = l.source
       const b = l.target
       if (a.order >= kk || b.order >= kk) continue
-      const lit = !sel || a === sel || b === sel
+      const two = this.second
+      const lit = two ? (a === sel && b === two) || (a === two && b === sel) : !sel || a === sel || b === sel
       ctx.globalAlpha = lit ? 0.75 : 0.08
       ctx.strokeStyle = PULSE_PLAIN
       ctx.lineWidth = Math.min(4, 0.8 + l.perWeek * 0.7) * px

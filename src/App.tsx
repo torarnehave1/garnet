@@ -27,7 +27,7 @@ import { usePulse } from './lib/usePulse'
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 const DiagramModal = lazy(() => import('./components/DiagramModal'))
 const NodePreview = lazy(() => import('./components/NodePreview'))
-import { Engine, type Focus, type GraphItem, type Item, type Snapshot } from './engine/Engine'
+import { Engine, type Focus, type GraphItem, type Item, type Pair, type Snapshot } from './engine/Engine'
 import {
   DEFAULT_FILTERS,
   monthOf,
@@ -241,6 +241,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [nodeNote, setNodeNote] = useState('')
   const [snap, setSnap] = useState<Snapshot>(EMPTY)
   const [selected, setSelected] = useState<Item | null>(null)
+  // Two members of a Virtual World selected together (Shift-click the second), and their tie.
+  const [pair, setPair] = useState<Pair | null>(null)
   // The mermaid-diagram node shown in the whole window, if any.
   const [diagram, setDiagram] = useState<{ graphId: string; nodeId: string; title: string } | null>(null)
   const closeDiagram = useCallback(() => setDiagram(null), [])
@@ -373,6 +375,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   useEffect(() => {
     const e = new Engine(cvRef.current!, {
       onSnapshot: setSnap,
+      onPair: setPair,
       onSelect: (d, byUser) => {
         setSelected(d)
         setFlowClosed(null)
@@ -929,6 +932,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             N={snap.N}
             skeleton={snap.skeleton}
             scopeAll={scope === 'all'}
+            pair={pair}
+            onPickSecond={() => engine?.pickSecond()}
             onClose={() => engine?.select(null)}
             onDiagram={(n) => setDiagram({ graphId: n.parent.id, nodeId: n.nid, title: n.label })}
           />

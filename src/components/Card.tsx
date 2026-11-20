@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
-import type { Item, NodeItem } from '../engine/Engine'
+import type { Item, NodeItem, Pair } from '../engine/Engine'
 import { useEditorBase, viewLink } from '../lib/editorLink'
 import { textHtml } from '../lib/graphRules'
 import { dayOf, SHARED } from '../lib/rows'
@@ -29,7 +29,9 @@ function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; 
   return <div className="cardBody" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
+export function Card({ item, user, N, skeleton, scopeAll, pair, onPickSecond, onClose, onDiagram }: { item: Item | null; user: User; N: number; skeleton: boolean; scopeAll: boolean; pair: Pair | null; onPickSecond: () => void; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
+  // After "Select a second member": the next click on the map picks it.
+  const [picking, setPicking] = useState<string | null>(null)
   // A Virtual World has no editor of its own: its defining graph opens in the platform editor.
   const editor = useEditorBase(item?.kind === 'g' ? (item.virtual ? '' : item.world) : item?.kind === 'n' ? item.parent.world : '')
   if (!item) return null
@@ -45,6 +47,16 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
     meta = 'Node' + (item.type ? ' of type ' + item.type : '') + ' in the graph ' + item.parent.title + (item.links.length ? ` · ${item.links.length} edges` : '')
     body = <NodeText graphId={item.parent.id} nodeId={item.nid} user={user} />
     link = { href: viewLink(editor, item.parent.id), text: 'Open Knowledge Graph' }
+  } else if (item.virtual && pair && pair.a === item) {
+    // Two members of a Virtual World selected together: what ties them.
+    const short = (t: string) => (t.length > 34 ? t.slice(0, 33) + '…' : t)
+    title = `${short(pair.a.title)} ⇄ ${short(pair.b.title)}`
+    meta =
+      (pair.perWeek != null ? `Tie: ${Math.round(pair.perWeek * 10) / 10} exchanges a week.` : 'No tie is defined between these two.') +
+      ` Pulse: ${pair.a.title} ${pair.pulseA || 'none'} · ${pair.b.title} ${pair.pulseB || 'none'}.` +
+      ' Strength: not set for this tie.' +
+      ` Members of the Virtual World ${item.world.replace(/ \(virtual\)$/, '')}; the numbers come from the graph that defines it.`
+    link = { href: viewLink(editor, item.virtual.graphId), text: 'Open the graph that defines this Virtual World' }
   } else if (item.virtual) {
     // A member of a Virtual World: not a graph on the server, only a node in the defining graph.
     title = item.title
@@ -74,6 +86,21 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
       <h2>{title}</h2>
       <p>{meta}</p>
       {body}
+      {item.kind === 'g' && item.virtual && !(pair && pair.a === item) && (
+        <p>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              setPicking(item.id)
+              onPickSecond()
+            }}
+          >
+            Select a second member
+          </button>{' '}
+          {picking === item.id ? 'Now click another member on the map.' : 'or Shift-click another member, to see what ties the two.'}
+        </p>
+      )}
       {item.kind === 'n' && item.type === 'mermaid-diagram' && (
         <p>
           <button type="button" className="ghost" onClick={() => onDiagram(item)}>
