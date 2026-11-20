@@ -252,6 +252,9 @@ export class Engine {
   private swallowClick = false
   private pressT = 0
   private pressAt: { clientX: number; clientY: number } | null = null
+  // The history event under the mouse: its whole name is shown on top, also when the lane had no
+  // room for it.
+  private hoverHist: NodeItem | null = null
   private cleanup: (() => void)[] = []
   // Course images by address: null while loading or when the address gave no picture.
   private pics = new Map<string, HTMLCanvasElement | null>()
@@ -891,7 +894,12 @@ export class Engine {
     on('pointercancel', stop)
     on('pointerleave', stop)
     on('mousemove', (e) => {
-      cv.style.cursor = this.pick(e.clientX, e.clientY) ? 'pointer' : ''
+      const p = this.pick(e.clientX, e.clientY)
+      cv.style.cursor = p ? 'pointer' : ''
+      this.hoverHist = p && p.kind === 'n' && p.hist ? p : null
+    })
+    on('mouseleave', () => {
+      this.hoverHist = null
     })
     const onResize = () => this.resize()
     window.addEventListener('resize', onResize)
@@ -1221,6 +1229,7 @@ export class Engine {
       }
     }
     if (this.detailOn) this.drawHistoryLanes(kk)
+    this.drawHistoryHover(kk)
     if (this.pulseMode === 'count' && !this.skeleton) this.drawPulseCounts(kk)
     ctx.globalAlpha = 1
   }
@@ -1570,6 +1579,29 @@ export class Engine {
       })
       ctx.textAlign = 'center'
     }
+  }
+  // The whole name of the history event under the mouse, on a dark ground above everything else.
+  // Events close together in a lane leave no room for each other's names; this shows them.
+  private drawHistoryHover(kk: number) {
+    const d = this.hoverHist
+    const { ctx, T } = this
+    if (!d || !d.hist || d.order >= kk || T.k < 3) return
+    ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    const tw = ctx.measureText(d.label).width
+    const h = this.fs(9)
+    const x = d.x + d.r + 2 / T.k
+    const y = d.y - d.r - h * 0.9
+    ctx.globalAlpha = 1
+    ctx.fillStyle = '#0b1220'
+    ctx.fillRect(x - 4 / T.k, y - h * 0.95, tw + 8 / T.k, h * 1.5)
+    ctx.strokeStyle = '#8fa0b8'
+    ctx.lineWidth = 0.6 / T.k
+    ctx.strokeRect(x - 4 / T.k, y - h * 0.95, tw + 8 / T.k, h * 1.5)
+    ctx.fillStyle = '#e6edf7'
+    ctx.textAlign = 'left'
+    ctx.fillText(d.label, x, y)
+    ctx.textAlign = 'center'
+    ctx.lineWidth = 0.6 / Math.sqrt(T.k)
   }
   // The longest start of a label that fits the width (the font already set), with … when cut.
   // Empty when not even the first word (the year, on a history line) fits.
