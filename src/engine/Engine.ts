@@ -1201,6 +1201,7 @@ export class Engine {
         if (todo.length) this.spreadLabels(todo, kk)
       }
     }
+    if (this.detailOn) this.drawHistoryLanes(kk)
     if (this.pulseMode === 'count' && !this.skeleton) this.drawPulseCounts(kk)
     ctx.globalAlpha = 1
   }
@@ -1408,24 +1409,39 @@ export class Engine {
     ctx.textAlign = 'center'
   }
   // The history line's size on the map: wider and taller once zoomed in, so labels fit.
-  private histBox(lanes: string[] = []) {
+  private histBox(lanes: string[] = [], g?: GraphItem) {
     const close = this.T.k >= 3
     let off = 10
     if (close && lanes.length) {
-      // Room for the lane names between the graph's circle and the axis.
-      this.ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
-      off = Math.max(...lanes.map((l) => this.ctx.measureText(l.length > 34 ? l.slice(0, 33) + '…' : l).width)) + 12 / this.T.k
+      // Room for the lane names between the graph's circle and the axis, and for the graph's own
+      // title, which stands centred under the circle.
+      const ctx = this.ctx
+      ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
+      const laneW = Math.max(...lanes.map((l) => ctx.measureText(l.length > 34 ? l.slice(0, 33) + '…' : l).width))
+      ctx.font = this.fs(10) + "px 'IBM Plex Sans',system-ui,sans-serif"
+      const t = g ? (g.title.length > 30 ? g.title.slice(0, 29) + '…' : g.title) : ''
+      const titleW = t ? ctx.measureText(t).width : 0
+      off = laneW + Math.max(0, titleW / 2 - (g?.r ?? 0)) + 12 / this.T.k
     }
     return { w: close ? 340 * Math.pow(this.T.k / 3, 0.6) : 120, gap: close ? 9 : 4.5, off }
   }
   // History nodes follow their graph: x from the year, y from the lane.
   private placeHistory() {
     const boxes = new Map<string, ReturnType<Engine['histBox']>>()
+    const loose = new Map<string, number>()
     for (const d of this.inner) {
       const h = d.parent.hist
+      if (h && !d.hist && !d.flow) {
+        // A node without a year (an About node): to the left of the circle, out of the lanes.
+        const i = loose.get(d.parent.id) ?? 0
+        loose.set(d.parent.id, i + 1)
+        d.x = d.fx = d.parent.x - d.parent.r - 14 / this.T.k
+        d.y = d.fy = d.parent.y + i * 10 / this.T.k
+        continue
+      }
       if (!d.hist || !h) continue
       let b = boxes.get(d.parent.id)
-      if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes)))
+      if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes, d.parent)))
       const { w, gap, off } = b
       const span = Math.max(1, h.y1 - h.y0)
       d.x = d.fx = d.parent.x + d.parent.r + off + ((d.hist.year - h.y0) / span) * w
@@ -1438,7 +1454,7 @@ export class Engine {
     for (const g of this.graphs) {
       const h = g.hist
       if (!h || g.order >= kk) continue
-      const { w, gap, off } = this.histBox(h.lanes)
+      const { w, gap, off } = this.histBox(h.lanes, g)
       const x0 = g.x + g.r + off
       const top = g.y - ((h.lanes.length - 1) / 2) * gap
       ctx.globalAlpha = this.isNear(g) ? 0.18 : 0.04
@@ -1461,11 +1477,45 @@ export class Engine {
         const x = x0 + ((y - h.y0) / span) * w
         ctx.fillText(String(y), x, top - gap * 0.9)
       }
-      ctx.textAlign = 'right'
-      h.lanes.forEach((lane, i) => ctx.fillText(lane.length > 34 ? lane.slice(0, 33) + '…' : lane, x0 - 3 / T.k, top + i * gap + this.fs(8) * 0.35))
       ctx.textAlign = 'center'
     }
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)
+  }
+  // Lane names, drawn last so that names held at the screen's left edge stay above the events.
+  private drawHistoryLanes(kk: number) {
+    const { ctx, T } = this
+    if (T.k < 3) return
+    ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    for (const g of this.graphs) {
+      const h = g.hist
+      if (!h || g.order >= kk) continue
+      const { gap, off } = this.histBox(h.lanes, g)
+      ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
+      const x0 = g.x + g.r + off
+      const top = g.y - ((h.lanes.length - 1) / 2) * gap
+      ctx.fillStyle = '#8fa0b8'
+      ctx.globalAlpha = this.isNear(g) ? 0.85 : 0.08
+      ctx.textAlign = 'right'
+      // When the axis is panned past the left edge, the lane names stay at that edge, on a dark
+      // ground, so each row can still be told.
+      const edge = -T.x / T.k + 8 / T.k
+      h.lanes.forEach((lane, i) => {
+        const txt = lane.length > 34 ? lane.slice(0, 33) + '…' : lane
+        const tw = ctx.measureText(txt).width
+        const right = Math.max(x0 - 3 / T.k, edge + tw)
+        const y = top + i * gap
+        if (right > x0 - 3 / T.k + 0.01) {
+          const a = ctx.globalAlpha
+          ctx.globalAlpha = 0.85
+          ctx.fillStyle = '#0b1220'
+          ctx.fillRect(right - tw - 3 / T.k, y - this.fs(8) * 0.75, tw + 6 / T.k, this.fs(8) * 1.5)
+          ctx.globalAlpha = a
+          ctx.fillStyle = '#8fa0b8'
+        }
+        ctx.fillText(txt, right, y + this.fs(8) * 0.35)
+      })
+      ctx.textAlign = 'center'
+    }
   }
   // The longest start of a label that fits the width (the font already set), with … when cut.
   // Empty when not even the first word (the year, on a history line) fits.
