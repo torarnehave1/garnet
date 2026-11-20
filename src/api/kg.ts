@@ -26,7 +26,9 @@ interface IndexRow {
   sharedMode?: ShareMode
   sharedWith?: { world: string; mode: ShareMode }[]
   publishedDomains?: string[]
-  nodes?: { id: string; label?: string; type?: string }[]
+  // updatedAt: when the node's content last changed (dev-worker 2026-11-20). Null or absent for a
+  // node not written since, and from an older server.
+  nodes?: { id: string; label?: string; type?: string; updatedAt?: string | null }[]
   edges?: { source: string; target: string }[]
 }
 interface IndexAnswer {

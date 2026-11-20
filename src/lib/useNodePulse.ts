@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { loadHistory, loadVersionNodes } from '../api/kg'
 import type { Engine } from '../engine/Engine'
-import { changedNodes, pickVersions } from './nodePulse'
+import { changedNodes, NODE_TIME_SINCE, pickVersions } from './nodePulse'
 import { dayStart, updatedMs, when } from './rows'
 import type { Row, User } from './types'
 
-// Up to three requests a graph (its history and two saved versions), so the nodes are worked out
+// Days from NODE_TIME_SINCE on need nothing from here: the map reads each node's own time.
+// For earlier days, two saved versions are compared. Up to three requests a graph (its history and two saved versions), so the nodes are worked out
 // only for a map of at most MOST graphs, a few at a time, the most recently changed first.
 const AT_ONCE = 4
 export const NODE_PULSE_MOST = 60
 
 export interface NodePulseSummary {
+  compared: boolean // false: only each node's own time is used, nothing is counted here
   nodes: number // nodes found changed so far
   graphs: number // graphs holding them
   read: number
@@ -33,9 +35,15 @@ export function useNodePulse(engine: Engine | null, user: User, shown: Row[], up
     if (!engine) return
     const by = new Map<string, Set<string>>()
     engine.setNodePulse(by)
+    engine.setNodeWindow(null)
     if (!active) return
     const from = dayStart(updFrom)
     const to = updTo ? dayStart(updTo) + 86400000 - 1 : Infinity
+    engine.setNodeWindow({ from, to })
+    if (from >= NODE_TIME_SINCE) {
+      void Promise.resolve().then(() => setSum({ compared: false, nodes: 0, graphs: 0, read: 0, toRead: 0, skipped: 0, capped: 0, failed: 0, done: true }))
+      return
+    }
     const all = shown.filter((r) => !r.virtual && updatedMs(r) >= from).sort((a, b) => updatedMs(b) - updatedMs(a))
     const todo = all.slice(0, NODE_PULSE_MOST)
     let read = 0
@@ -46,7 +54,7 @@ export function useNodePulse(engine: Engine | null, user: User, shown: Row[], up
       if (stopped) return
       let nodes = 0
       by.forEach((s) => (nodes += s.size))
-      setSum({ nodes, graphs: by.size, read, toRead: todo.length, skipped: all.length - todo.length, capped, failed, done })
+      setSum({ compared: true, nodes, graphs: by.size, read, toRead: todo.length, skipped: all.length - todo.length, capped, failed, done })
     }
     void Promise.resolve().then(() => report(!todo.length))
     let next = 0

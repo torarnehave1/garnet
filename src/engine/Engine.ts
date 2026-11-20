@@ -3,7 +3,7 @@ import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
 import { courseOrder, flowOrder, iconKey, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
-import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, versionText, type PulseMode } from '../lib/pulse'
+import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, utcMs, versionText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
 import type { KgGraph, Row } from '../lib/types'
@@ -67,6 +67,7 @@ export interface NodeItem extends Base {
   flow: { row: number; num: number } | null
   hist: { year: number; lane: number } | null
   status: StatusKind
+  upd: number // when the node's content last changed (ms), 0 when the server gave no time
 }
 export type Item = Hub | GraphItem | NodeItem
 
@@ -207,6 +208,11 @@ export class Engine {
   private nodePulse: Map<string, Set<string>> = new Map()
   setNodePulse(by: Map<string, Set<string>>) {
     this.nodePulse = by
+  }
+  // The days themselves (ms): a node whose own time falls inside them pulses too.
+  private nodeWindow: { from: number; to: number } | null = null
+  setNodeWindow(w: { from: number; to: number } | null) {
+    this.nodeWindow = w
   }
   // The nodes a text search found, by graph id: ringed on the map. null: no search is on.
   private found: Map<string, Set<string>> | null = null
@@ -479,6 +485,7 @@ export class Engine {
             hist: null,
             // Task state lives in the node's own data (metadata.status).
             status: n.type === 'oppgave' ? statusKind(n.metadata?.status) : '',
+            upd: utcMs(n.updatedAt),
           }
           by.set(n.id, o)
           this.inner.push(o)
@@ -1108,7 +1115,7 @@ export class Engine {
       }
     }
     if (pulseOn) this.drawPulse(kk, now)
-    if (this.pulseMode !== 'off' && !this.skeleton && this.detailOn && this.nodePulse.size) this.drawNodePulse(kk, now)
+    if (this.pulseMode !== 'off' && !this.skeleton && this.detailOn && (this.nodePulse.size || this.nodeWindow)) this.drawNodePulse(kk, now)
     this.drawShares(kk)
     this.hubs.forEach((d, i) => {
       if (!d.vis) return
@@ -1381,7 +1388,9 @@ export class Engine {
     const beating = this.pulseMode === 'beat' && !this.reduced
     ctx.strokeStyle = PULSE_PLAIN
     for (const d of this.inner) {
-      if (d.order >= kk || !this.nodePulse.get(d.parent.id)?.has(d.nid)) continue
+      if (d.order >= kk) continue
+      const w = this.nodeWindow
+      if (!(w && d.upd >= w.from && d.upd <= w.to) && !this.nodePulse.get(d.parent.id)?.has(d.nid)) continue
       const near = this.isNear(d) ? 0.95 : 0.15
       const phase = (hash(d.parent.id + d.nid) % 1000) / 1000
       const e = beating ? beat(now, 4, phase) : 0

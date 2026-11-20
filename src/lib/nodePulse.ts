@@ -1,11 +1,17 @@
 // The nodes that were changed in the days the "Updated from … to" filter names (architect's ask
 // 2026-11-20): a pulse on the node itself, not only on its graph.
 //
-// A node carries no time of its own on the server: only the graph has an "updated" time, and the
-// store keeps the graph's 20 newest saved versions whole. So the answer is worked out by comparing
-// two saved versions of the graph: the one that stood when the days began, and the newest one
-// written inside them. A node that is new, or that reads differently, was changed in those days.
+// From NODE_TIME_SINCE each node carries its own time on the server (metadata.updatedAt, set on
+// every write that changes the node's content), and the map reads it with the node list: no extra
+// request. Changes made before that carry no time. For days that begin before it, the answer is
+// also worked out the earlier way: by comparing two saved versions of the graph (the store keeps
+// the 20 newest whole) — the one that stood when the days began, and the newest one written inside
+// them. A node that is new, or that reads differently, was changed in those days.
 import type { KgNode } from './types'
+
+// Days that begin before this are also answered by comparing versions. Set a little after the
+// server began to stamp nodes (deployed 2026-11-20/21), so no change falls between the two ways.
+export const NODE_TIME_SINCE = Date.parse('2026-11-22T00:00:00Z')
 
 export interface Saved {
   v: number
@@ -40,7 +46,16 @@ const PLACE = new Set(['position', 'x', 'y', 'visible'])
 function face(n: KgNode): string {
   const o = n as unknown as Record<string, unknown>
   const out: Record<string, unknown> = {}
-  for (const k of Object.keys(o).sort()) if (!PLACE.has(k)) out[k] = o[k]
+  for (const k of Object.keys(o).sort()) {
+    if (PLACE.has(k) || k === 'updatedAt') continue
+    let v = o[k]
+    // The server's own stamp is not content.
+    if (k === 'metadata' && v && typeof v === 'object' && !Array.isArray(v)) {
+      const { updatedAt: _t, ...rest } = v as Record<string, unknown>
+      v = Object.keys(rest).length ? rest : null
+    }
+    if (v != null) out[k] = v
+  }
   return JSON.stringify(out)
 }
 

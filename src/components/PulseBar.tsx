@@ -54,7 +54,8 @@ export function PulseBar({ mode, sum, nodes, onShow }: { mode: PulseMode; sum: P
           {RIPPLE_SECONDS} seconds to fade. Colour as in Colour.
         </div>
       )}
-      {nodes && (
+      {nodes && !nodes.compared && <div className="pulseNote">Each node changed in the days chosen under “Updated from” has its own pulse.</div>}
+      {nodes && nodes.compared && (
         <div className="pulseNote">
           Nodes changed in the days chosen under “Updated from”:{' '}
           {nodes.nodes ? (

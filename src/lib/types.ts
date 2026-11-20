@@ -41,6 +41,8 @@ export interface KgNode {
   // A media node's address (a youtube-video node: the video).
   path?: string | null
   metadata?: Record<string, unknown> & { status?: unknown }
+  // When the node's content last changed, as the index gives it (the node's metadata.updatedAt).
+  updatedAt?: string | null
 }
 export interface KgEdge {
   id?: string
