@@ -1011,6 +1011,28 @@ export class Engine {
       ctx.globalAlpha = this.isNear(d) ? 0.92 : 0.1
       ctx.fillText(d.tag, d.x, d.y - this.hubR(d, false) - 4 / T.k)
     }
+    // A Virtual World's members never get the detail view (they have no nodes on the server), so
+    // their simulated member number is written inside the circle as soon as the circle is large
+    // enough on screen to hold it, and their name below once zoomed in.
+    for (const d of this.graphs) {
+      const m = d.virtual?.members
+      if (m == null || d.order >= kk) continue
+      ctx.globalAlpha = this.isNear(d) ? 1 : 0.15
+      if (d.r * T.k >= 6) {
+        const txt = String(m)
+        ctx.font = '600 ' + d.r * (txt.length > 2 ? 0.8 : 1) + "px 'IBM Plex Sans',system-ui,sans-serif"
+        ctx.fillStyle = '#0b1220'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(txt, d.x, d.y)
+        ctx.textBaseline = 'alphabetic'
+      }
+      if (!this.detailOn && T.k >= 2.5) {
+        ctx.font = this.fs(10) + "px 'IBM Plex Sans',system-ui,sans-serif"
+        ctx.fillStyle = '#8fa0b8'
+        ctx.fillText(d.title.length > 30 ? d.title.slice(0, 29) + '…' : d.title, d.x, d.y + d.r + this.fs(10) * 1.3)
+      }
+    }
+    ctx.globalAlpha = 1
     if (this.detailOn && T.k >= 0.8) {
       // Graph titles, and node labels once zoomed in close.
       ctx.fillStyle = '#8fa0b8'
