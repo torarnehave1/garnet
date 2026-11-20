@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clearUser, completeMagicLink, isSuperadmin, magicInUrl, readUser } from './api/auth'
 import { Recorder } from './components/Recorder'
-import { clearCaches, deleteGraph, loadGraph, loadIndex, loadNodes, loadVirtualWorlds, moveGraphToWorld, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph } from './api/kg'
+import { clearCaches, deleteGraph, HISTORY_TYPE, loadGraph, loadHistoryGraphIds, loadIndex, loadNodes, loadVirtualWorlds, moveGraphToWorld, renameGraph, restoreGraph, searchText, shareGraph, unshareGraph } from './api/kg'
 import type { McpError } from './api/mcp'
 import { Brand } from './components/Brand'
 import { BulkTag } from './components/BulkTag'
@@ -278,6 +278,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       : null
 
   const [worlds, setWorlds] = useState<string[]>(() => readWorlds(user))
+  // Graphs of the type history-line (they hold a history-line header node).
+  const [historyIds, setHistoryIds] = useState<Set<string>>(() => new Set())
   const eff = useMemo(() => reconcile(filters, rows, worlds), [filters, rows, worlds])
   const effRef = useRef(eff)
   effRef.current = eff
@@ -432,6 +434,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       } catch {
         /* no Virtual Worlds this time */
       }
+      try {
+        if (u) setHistoryIds(new Set(await loadHistoryGraphIds(u, sc)))
+      } catch {
+        /* no history lines this time */
+      }
       if (mine !== loadToken.current) return
       writeCache(sc, u, got)
       writeWorlds(u, ws)
@@ -524,17 +531,23 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
               engine.setTaskStatus(id, by)
             })
             .catch(() => {})
-        // History lines: graphs tagged #HISTORYLINE, whose nodes carry metadata.year and lane.
-        for (const id of engine.graphsWithHistory())
+        // History lines: graphs holding a history-line header node; events carry metadata.year and lane.
+        for (const id of engine.graphsWithHistory(historyIds))
           loadGraph(u, id)
             .then((g) => {
               if (mine !== renderToken.current) return
               const by: Record<string, { year: number; lane: string }> = {}
+              let lanes: { key: string; name: string }[] = []
               for (const n of g.nodes) {
+                if (n.type === HISTORY_TYPE) {
+                  const ls = n.metadata?.lanes
+                  if (Array.isArray(ls)) lanes = ls.filter((l) => l && typeof l === 'object').map((l) => ({ key: String((l as { key?: unknown }).key ?? ''), name: String((l as { name?: unknown }).name ?? (l as { key?: unknown }).key ?? '') }))
+                  continue
+                }
                 const y = n.metadata?.year
                 if (typeof y === 'number') by[n.id] = { year: y, lane: String(n.metadata?.lane ?? '') }
               }
-              engine.setHistory(id, by)
+              engine.setHistory(id, by, lanes)
             })
             .catch(() => {})
         // Course step icons (video, PDF or text): read each course graph once, the same way.
@@ -559,7 +572,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             'Showing the graphs only.',
         )
       })
-  }, [engine, rows, loaded, effKey, found])
+  }, [engine, rows, loaded, effKey, found, historyIds])
 
   /* ---------- a chat question's view, set back on the map ---------- */
   function restoreView(st: MapState) {

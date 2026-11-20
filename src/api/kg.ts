@@ -175,6 +175,14 @@ export function loadHistory(user: User, id: string, updated: string): Promise<Gr
   return stamps
 }
 
+// History lines (graph type history-line, registered 2026-11-20): the graphs that hold a
+// history-line header node. Their events are drawn on a time axis (Engine.setHistory).
+export const HISTORY_TYPE = 'history-line'
+export async function loadHistoryGraphIds(user: User, scope: Scope): Promise<string[]> {
+  const a = await mcpCall<IndexAnswer>(user, 'graph_index', { scope, nodeType: HISTORY_TYPE })
+  return (a.graphs || []).filter((g) => g && g.graphId).map((g) => g.graphId)
+}
+
 // Virtual Worlds (architect 2026-11-20): Worlds that are defined in a knowledge graph and have no
 // Cloudflare account. Every graph the person can see that holds a virtual-world node is read once;
 // each such node is one World, and the nodes it has an edge to are its members (lib/virtual.ts).

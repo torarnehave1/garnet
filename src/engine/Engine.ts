@@ -144,7 +144,6 @@ export interface EngineEvents {
 
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
-const HISTORY_TAG = '#HISTORYLINE'
 const SPREAD_K = 12 // From this zoom (as the Zoom chip shows it), node names spread out.
 const STOP = new Set(
   'with from that this what have your about into their they will been were when which there than then also only over under more most some such these those just like for and the med for som det den der har ikke eller til fra hva hvordan hvorfor som'.split(' '),
@@ -584,27 +583,33 @@ export class Engine {
     for (const o of this.inner) if (o.type === COURSE_TYPE && o.parent.id === graphId && byNode[o.nid]) o.icon = byNode[o.nid]
   }
 
-  // A history line: graphs tagged #HISTORYLINE whose nodes carry metadata.year (and lane). The
-  // node index does not carry metadata, so these graphs are read whole afterwards, as tasks are.
-  graphsWithHistory(): string[] {
-    const ids = new Set<string>()
-    for (const o of this.inner) if (o.parent.tags.includes(HISTORY_TAG) && !o.flow) ids.add(o.parent.id)
-    return [...ids]
+  // A history line: a graph holding a history-line header node (graph type history-line). The node
+  // index carries no metadata, so these graphs are read whole afterwards, as tasks are.
+  graphsWithHistory(ids: Set<string>): string[] {
+    const out = new Set<string>()
+    for (const o of this.inner) if (ids.has(o.parent.id) && !o.flow) out.add(o.parent.id)
+    return [...out]
   }
-  setHistory(graphId: string, byNode: Record<string, { year: number; lane: string }>) {
+  // byNode: each dated event's year and lane (key or name). lanes: the header's rows, top to bottom.
+  setHistory(graphId: string, byNode: Record<string, { year: number; lane: string }>, lanes: { key: string; name: string }[] = []) {
     const mine = this.inner.filter((o) => o.parent.id === graphId && byNode[o.nid])
     const g = this.graphs.find((x) => x.id === graphId)
-    if (!g || mine.length < 5) return
+    if (!g || mine.length < 2) return
     const first = new Map<string, number>()
     for (const o of mine) {
       const v = byNode[o.nid]
       first.set(v.lane, Math.min(first.get(v.lane) ?? Infinity, v.year))
     }
-    const lanes = [...first.keys()].sort((a, b) => first.get(a)! - first.get(b)!)
+    // The header's lanes in its own order; an event's lane may name one by key or by name. Lanes
+    // the header does not list follow after, by their first year.
+    const nameOf = (l: string) => lanes.find((x) => x.key === l || x.name === l)?.name ?? l
+    const extra = [...new Set([...first.keys()].map(nameOf))].filter((n) => !lanes.some((x) => x.name === n))
+    extra.sort((a, b) => Math.min(...[...first].filter(([l]) => nameOf(l) === a).map(([, y]) => y)) - Math.min(...[...first].filter(([l]) => nameOf(l) === b).map(([, y]) => y)))
+    const rows = [...lanes.map((x) => x.name), ...extra]
     const years = mine.map((o) => byNode[o.nid].year)
-    g.hist = { y0: Math.min(...years), y1: Math.max(...years), lanes }
+    g.hist = { y0: Math.min(...years), y1: Math.max(...years), lanes: rows }
     for (const o of mine) {
-      o.hist = { year: byNode[o.nid].year, lane: lanes.indexOf(byNode[o.nid].lane) }
+      o.hist = { year: byNode[o.nid].year, lane: rows.indexOf(nameOf(byNode[o.nid].lane)) }
       o.r = 2
     }
     // A dated node stands on the line, not on a spoke to its graph.
