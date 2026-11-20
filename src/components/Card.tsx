@@ -48,7 +48,7 @@ export function Card({ item, user, N, skeleton, scopeAll, onClose, onDiagram }: 
   } else if (item.virtual) {
     // A member of a Virtual World: not a graph on the server, only a node in the defining graph.
     title = item.title
-    meta = `Member of the Virtual World ${item.world.replace(/ \(virtual\)$/, '')}. This World is not real: it is defined in a knowledge graph and has no account of its own.` + (item.tags.length ? ' · ' + item.tags.join(' ') : '')
+    meta = `Member of the Virtual World ${item.world.replace(/ \(virtual\)$/, '')}. This World is not real: it is defined in a knowledge graph and has no account of its own.` + (item.tags.length ? ' · ' + item.tags.join(' ') : '') + (item.virtual.members != null ? ` · Simulated members: ${item.virtual.members} (an invented number)` : '')
     body = <NodeText graphId={item.virtual.graphId} nodeId={item.virtual.nodeId} user={user} />
     link = { href: viewLink(editor, item.virtual.graphId), text: 'Open the graph that defines this Virtual World' }
   } else {

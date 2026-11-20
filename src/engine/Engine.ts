@@ -49,7 +49,7 @@ export interface GraphItem extends Base {
   sharedMode?: 'read' | 'write'
   sharedWith?: { world: string; mode: 'read' | 'write' }[]
   // A member of a Virtual World: drawn with a dashed ring, and it does not exist on the server.
-  virtual?: { graphId: string; nodeId: string }
+  virtual?: { graphId: string; nodeId: string; members?: number }
 }
 export interface NodeItem extends Base {
   kind: 'n'
@@ -268,7 +268,8 @@ export class Engine {
       world: g.world || '',
       order: i,
       t,
-      r: Math.min(6, 1.8 + Math.sqrt(g.n) * 0.35),
+      // A member of a Virtual World with a simulated member number is sized by that number.
+      r: g.virtual?.members != null ? Math.min(10, 1.8 + Math.sqrt(g.virtual.members) * 0.55) : Math.min(6, 1.8 + Math.sqrt(g.n) * 0.35),
       image: (g.types || []).includes(COURSE_TYPE) ? g.image || '' : '',
       header: g.header || '',
       color: g.tags.length ? colorOf(g.tags[0]) : LOOSE,
@@ -1017,7 +1018,8 @@ export class Engine {
       for (const d of this.graphs) {
         if (d.order >= kk) continue
         ctx.globalAlpha = this.isNear(d) ? 0.9 : 0.08
-        ctx.fillText(d.title.length > 30 ? d.title.slice(0, 29) + '…' : d.title, d.x, d.y + d.r + this.fs(10) * 1.1)
+        const name = d.title.length > 30 ? d.title.slice(0, 29) + '…' : d.title
+        ctx.fillText(d.virtual?.members != null ? `${name} · ${d.virtual.members}` : name, d.x, d.y + d.r + this.fs(10) * 1.1)
       }
       if (T.k >= 3) {
         ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"

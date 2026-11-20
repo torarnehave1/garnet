@@ -23,6 +23,20 @@ function memberTags(n: KgNode): string[] {
   return parseTags(text(n.metadata?.metaArea) || text(n.metadata?.region))
 }
 
+// Simulated member numbers (architect's choice 2026-11-20): the virtual-world node keeps them in
+// metadata.simulated.members as { memberNodeId: number }. They are invented, kept in one place and
+// apart from anything real on the member nodes, so a simulation can change them without touching
+// the members themselves.
+function simulatedMembers(w: KgNode): Map<string, number> {
+  const out = new Map<string, number>()
+  const sim = (w.metadata as { simulated?: { members?: unknown } } | undefined)?.simulated?.members
+  if (!sim || typeof sim !== 'object') return out
+  for (const [id, v] of Object.entries(sim as Record<string, unknown>)) {
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out.set(id, Math.round(v))
+  }
+  return out
+}
+
 /**
  * The Virtual Worlds one graph defines, and their members as rows for the map.
  * `base` is the defining graph's own created and updated time: a member has none of its own.
@@ -35,6 +49,7 @@ export function virtualRows(graphId: string, base: { created: string; updated: s
     if (w.type !== VIRTUAL_TYPE) continue
     const world = virtualWorldName(w.label)
     if (!worlds.includes(world)) worlds.push(world)
+    const sim = simulatedMembers(w)
     const seen = new Set<string>()
     for (const e of g.edges) {
       if (e.source !== w.id || seen.has(e.target)) continue
@@ -57,7 +72,7 @@ export function virtualRows(graphId: string, base: { created: string; updated: s
         header: '',
         createdBy: '',
         version: null,
-        virtual: { graphId, nodeId: m.id },
+        virtual: { graphId, nodeId: m.id, ...(sim.has(m.id) ? { members: sim.get(m.id) } : {}) },
       })
     }
   }

@@ -22,7 +22,9 @@ export interface Row {
   sharedWith?: { world: string; mode: ShareMode }[] // every World it is shared with
   // A member of a Virtual World (lib/virtual.ts): not a graph on the server. It is read from a
   // virtual-world node in the graph `graphId`; `nodeId` is the member's own node there.
-  virtual?: { graphId: string; nodeId: string }
+  // `members` is a simulated member number the Virtual World gives this member: an invented
+  // number, never a real one. It sets the circle's size and is written after the name.
+  virtual?: { graphId: string; nodeId: string; members?: number }
 }
 export type ShareMode = 'read' | 'write'
 
