@@ -1043,7 +1043,8 @@ export class Engine {
         ctx.fillText(txt, d.x, d.y)
         ctx.textBaseline = 'alphabetic'
       }
-      if (!this.detailOn && T.k >= 2.5) {
+      // 1.5 as the Zoom chip shows it.
+      if (!this.detailOn && T.k / this.zoom0 >= 1.5) {
         ctx.font = this.fs(10) + "px 'IBM Plex Sans',system-ui,sans-serif"
         ctx.fillStyle = '#8fa0b8'
         ctx.fillText(d.title.length > 30 ? d.title.slice(0, 29) + '…' : d.title, d.x, d.y + d.r + this.fs(10) * 1.3)
@@ -1114,7 +1115,7 @@ export class Engine {
       ctx.beginPath()
       ctx.arc(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 3.2 * px, 0, 6.2832)
       ctx.fill()
-      if (T.k >= 1.5) {
+      if (T.k / this.zoom0 >= 1.5) {
         ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"
         ctx.textAlign = 'center'
         ctx.fillStyle = '#ffa3ba'
