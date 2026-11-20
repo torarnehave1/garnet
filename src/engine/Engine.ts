@@ -39,6 +39,8 @@ export interface GraphItem extends Base {
   color: string
   sem: GraphItem[]
   flowRows: number
+  // A history line: nodes that carry metadata.year stand on a time axis, one row per lane.
+  hist?: { y0: number; y1: number; lanes: string[] }
   // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
   image: string
   // The graph's header image: drawn inside the circle once the circle is large on screen.
@@ -63,6 +65,7 @@ export interface NodeItem extends Base {
   color: string
   links: NodeItem[]
   flow: { row: number; num: number } | null
+  hist: { year: number; lane: number } | null
   status: StatusKind
 }
 export type Item = Hub | GraphItem | NodeItem
@@ -141,6 +144,7 @@ export interface EngineEvents {
 
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
+const HISTORY_TAG = '#HISTORYLINE'
 const SPREAD_K = 12 // From this zoom (as the Zoom chip shows it), node names spread out.
 const STOP = new Set(
   'with from that this what have your about into their they will been were when which there than then also only over under more most some such these those just like for and the med for som det den der har ikke eller til fra hva hvordan hvorfor som'.split(' '),
@@ -467,6 +471,7 @@ export class Engine {
             y: g.y + Math.sin(a) * (8 + i * 0.3),
             links: [],
             flow: null,
+            hist: null,
             // Task state lives in the node's own data (metadata.status).
             status: n.type === 'oppgave' ? statusKind(n.metadata?.status) : '',
           }
@@ -498,9 +503,10 @@ export class Engine {
         })
         g.flowRows = row
         if (head) this.flowLinks.push({ source: g, target: head, stem: true })
+        g.hist = undefined
         nodesIn.forEach((n) => {
           const o = by.get(n.id)!
-          if (!o.flow) this.containLinks.push({ source: o, target: g })
+          if (!o.flow && !o.hist) this.containLinks.push({ source: o, target: g })
         })
         d.edges.forEach((e) => {
           const a = by.get(e.source)
@@ -576,6 +582,37 @@ export class Engine {
   }
   setNodeIcons(graphId: string, byNode: Record<string, string>) {
     for (const o of this.inner) if (o.type === COURSE_TYPE && o.parent.id === graphId && byNode[o.nid]) o.icon = byNode[o.nid]
+  }
+
+  // A history line: graphs tagged #HISTORYLINE whose nodes carry metadata.year (and lane). The
+  // node index does not carry metadata, so these graphs are read whole afterwards, as tasks are.
+  graphsWithHistory(): string[] {
+    const ids = new Set<string>()
+    for (const o of this.inner) if (o.parent.tags.includes(HISTORY_TAG) && !o.flow) ids.add(o.parent.id)
+    return [...ids]
+  }
+  setHistory(graphId: string, byNode: Record<string, { year: number; lane: string }>) {
+    const mine = this.inner.filter((o) => o.parent.id === graphId && byNode[o.nid])
+    const g = this.graphs.find((x) => x.id === graphId)
+    if (!g || mine.length < 5) return
+    const first = new Map<string, number>()
+    for (const o of mine) {
+      const v = byNode[o.nid]
+      first.set(v.lane, Math.min(first.get(v.lane) ?? Infinity, v.year))
+    }
+    const lanes = [...first.keys()].sort((a, b) => first.get(a)! - first.get(b)!)
+    const years = mine.map((o) => byNode[o.nid].year)
+    g.hist = { y0: Math.min(...years), y1: Math.max(...years), lanes }
+    for (const o of mine) {
+      o.hist = { year: byNode[o.nid].year, lane: lanes.indexOf(byNode[o.nid].lane) }
+      o.r = 2
+    }
+    // A dated node stands on the line, not on a spoke to its graph.
+    for (let i = this.containLinks.length - 1; i >= 0; i--) if ((this.containLinks[i].source as NodeItem).hist) this.containLinks.splice(i, 1)
+    const sim = this.sim
+    if (!sim) return
+    ;(sim.force('contain') as ReturnType<typeof forceLink<Item, Link>> | undefined)?.links(this.containLinks)
+    sim.alpha(Math.max(sim.alpha(), 0.1)).restart()
   }
 
   /* ---------- time ---------- */
@@ -917,6 +954,7 @@ export class Engine {
         d.y = d.fy = d.parent.y + (d.flow.row - (d.parent.flowRows - 1) / 2) * gap
       }
     }
+    if (this.detailOn) this.placeHistory()
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)
     const line = (a: Item, b: Item) => {
       ctx.beginPath()
@@ -956,6 +994,7 @@ export class Engine {
         ctx.globalAlpha = sel ? (touches(l) ? 0.9 : 0.04) : 0.4
         line(l.source, l.target)
       }
+      this.drawHistoryAxes(kk)
       ctx.fillStyle = '#e8eef7'
       for (const l of this.flowLinks) {
         const tgt = l.target as GraphItem | NodeItem
@@ -1339,6 +1378,57 @@ export class Engine {
       ctx.fillText(versionText(v), x, y)
     }
     ctx.textAlign = 'center'
+  }
+  // The history line's size on the map: wider and taller once zoomed in, so labels fit.
+  private histBox() {
+    const close = this.T.k >= 3
+    return { w: close ? 340 : 120, gap: close ? 9 : 4.5, off: close ? 30 : 10 }
+  }
+  // History nodes follow their graph: x from the year, y from the lane.
+  private placeHistory() {
+    const { w, gap, off } = this.histBox()
+    for (const d of this.inner) {
+      const h = d.parent.hist
+      if (!d.hist || !h) continue
+      const span = Math.max(1, h.y1 - h.y0)
+      d.x = d.fx = d.parent.x + d.parent.r + off + ((d.hist.year - h.y0) / span) * w
+      d.y = d.fy = d.parent.y + (d.hist.lane - (h.lanes.length - 1) / 2) * gap
+    }
+  }
+  // Faint lane lines, lane names on the left and decade marks above, once zoomed in.
+  private drawHistoryAxes(kk: number) {
+    const { ctx, T } = this
+    const { w, gap, off } = this.histBox()
+    for (const g of this.graphs) {
+      const h = g.hist
+      if (!h || g.order >= kk) continue
+      const x0 = g.x + g.r + off
+      const top = g.y - ((h.lanes.length - 1) / 2) * gap
+      ctx.globalAlpha = this.isNear(g) ? 0.18 : 0.04
+      ctx.strokeStyle = g.color
+      ctx.lineWidth = Math.min(gap * 0.55, 3)
+      h.lanes.forEach((_, i) => {
+        ctx.beginPath()
+        ctx.moveTo(x0, top + i * gap)
+        ctx.lineTo(x0 + w, top + i * gap)
+        ctx.stroke()
+      })
+      if (T.k < 3) continue
+      const span = Math.max(1, h.y1 - h.y0)
+      ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
+      ctx.fillStyle = '#8fa0b8'
+      ctx.globalAlpha = this.isNear(g) ? 0.85 : 0.08
+      ctx.textAlign = 'center'
+      const step = span > 60 ? 20 : 10
+      for (let y = Math.ceil(h.y0 / step) * step; y <= h.y1; y += step) {
+        const x = x0 + ((y - h.y0) / span) * w
+        ctx.fillText(String(y), x, top - gap * 0.9)
+      }
+      ctx.textAlign = 'right'
+      h.lanes.forEach((lane, i) => ctx.fillText(lane.length > 34 ? lane.slice(0, 33) + '…' : lane, x0 - 3 / T.k, top + i * gap + this.fs(8) * 0.35))
+      ctx.textAlign = 'center'
+    }
+    ctx.lineWidth = 0.6 / Math.sqrt(T.k)
   }
   private flowText(d: NodeItem) {
     const lab = d.label.length > 44 ? d.label.slice(0, 43) + '…' : d.label

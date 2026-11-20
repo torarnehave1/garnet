@@ -524,6 +524,19 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
               engine.setTaskStatus(id, by)
             })
             .catch(() => {})
+        // History lines: graphs tagged #HISTORYLINE, whose nodes carry metadata.year and lane.
+        for (const id of engine.graphsWithHistory())
+          loadGraph(u, id)
+            .then((g) => {
+              if (mine !== renderToken.current) return
+              const by: Record<string, { year: number; lane: string }> = {}
+              for (const n of g.nodes) {
+                const y = n.metadata?.year
+                if (typeof y === 'number') by[n.id] = { year: y, lane: String(n.metadata?.lane ?? '') }
+              }
+              engine.setHistory(id, by)
+            })
+            .catch(() => {})
         // Course step icons (video, PDF or text): read each course graph once, the same way.
         for (const id of engine.graphsWithCourseSteps())
           loadGraph(u, id)
