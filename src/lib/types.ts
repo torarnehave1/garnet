@@ -26,7 +26,9 @@ export interface Row {
   // number, never a real one. It sets the circle's size and is written after the name.
   // `links` are this member's connections to other members of the same World (the other member's
   // row id, and how many exchanges a week the connection carries): a line with a pulse on the map.
-  virtual?: { graphId: string; nodeId: string; members?: number; links?: { to: string; perWeek: number }[] }
+  // `pulse` is a simulated pulse (changes in the week, as the pulse layer counts them): it feeds
+  // the map's own Pulse menu, so Colour, Beat and Ripple show it as they show a real graph's.
+  virtual?: { graphId: string; nodeId: string; members?: number; pulse?: number; links?: { to: string; perWeek: number }[] }
 }
 export type ShareMode = 'read' | 'write'
 

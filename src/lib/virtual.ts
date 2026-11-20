@@ -27,9 +27,9 @@ function memberTags(n: KgNode): string[] {
 // metadata.simulated.members as { memberNodeId: number }. They are invented, kept in one place and
 // apart from anything real on the member nodes, so a simulation can change them without touching
 // the members themselves.
-function simulatedMembers(w: KgNode): Map<string, number> {
+function simulated(w: KgNode, key: 'members' | 'pulse'): Map<string, number> {
   const out = new Map<string, number>()
-  const sim = (w.metadata as { simulated?: { members?: unknown } } | undefined)?.simulated?.members
+  const sim = (w.metadata as { simulated?: Record<string, unknown> } | undefined)?.simulated?.[key]
   if (!sim || typeof sim !== 'object') return out
   for (const [id, v] of Object.entries(sim as Record<string, unknown>)) {
     if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out.set(id, Math.round(v))
@@ -65,7 +65,9 @@ export function virtualRows(graphId: string, base: { created: string; updated: s
     if (w.type !== VIRTUAL_TYPE) continue
     const world = virtualWorldName(w.label)
     if (!worlds.includes(world)) worlds.push(world)
-    const sim = simulatedMembers(w)
+    const sim = simulated(w, 'members')
+    // A simulated pulse per member, kept the same way in metadata.simulated.pulse.
+    const pul = simulated(w, 'pulse')
     const seen = new Set<string>()
     for (const e of g.edges) {
       if (e.source !== w.id || seen.has(e.target)) continue
@@ -88,7 +90,7 @@ export function virtualRows(graphId: string, base: { created: string; updated: s
         header: '',
         createdBy: '',
         version: null,
-        virtual: { graphId, nodeId: m.id, ...(sim.has(m.id) ? { members: sim.get(m.id) } : {}) },
+        virtual: { graphId, nodeId: m.id, ...(sim.has(m.id) ? { members: sim.get(m.id) } : {}), ...(pul.get(m.id) ? { pulse: pul.get(m.id) } : {}) },
       })
     }
     // A connection is kept on its first member's row, and only when both ends are members.

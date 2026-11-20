@@ -49,7 +49,7 @@ export interface GraphItem extends Base {
   sharedMode?: 'read' | 'write'
   sharedWith?: { world: string; mode: 'read' | 'write' }[]
   // A member of a Virtual World: drawn with a dashed ring, and it does not exist on the server.
-  virtual?: { graphId: string; nodeId: string; members?: number; links?: { to: string; perWeek: number }[] }
+  virtual?: { graphId: string; nodeId: string; members?: number; pulse?: number; links?: { to: string; perWeek: number }[] }
 }
 export interface NodeItem extends Base {
   kind: 'n'
@@ -157,6 +157,12 @@ export class Engine {
   private metaLinks: Link<GraphItem, Hub>[] = []
   private semLinks: SemLink[] = []
   private virtLinks: VirtLink[] = []
+  // The simulated pulse of Virtual World members, by row id: a member's own simulated pulse, or
+  // else the exchanges a week on its connections. Read by the same Pulse menu as the real counts.
+  private simPulse: Map<string, number> = new Map()
+  private pulseN(id: string) {
+    return this.simPulse.get(id) ?? this.pulse.get(id)
+  }
   private containLinks: Link<NodeItem, GraphItem>[] = []
   private innerLinks: Link<NodeItem, NodeItem>[] = []
   private flowLinks: FlowLink[] = []
@@ -361,6 +367,14 @@ export class Engine {
         const to = byRow.get(l.to)
         if (to) this.virtLinks.push({ source: g, target: to, perWeek: l.perWeek })
       }
+    }
+    this.simPulse = new Map()
+    const tie = new Map<string, number>()
+    for (const l of this.virtLinks) for (const e of [l.source, l.target]) tie.set(e.id, (tie.get(e.id) || 0) + l.perWeek)
+    for (const g of graphs) {
+      if (!g.virtual) continue
+      const n = g.virtual.pulse ?? Math.round(tie.get(g.id) || 0)
+      if (n > 0) this.simPulse.set(g.id, n)
     }
     this.semLinks = []
     const pair = new Set<string>()
@@ -953,12 +967,12 @@ export class Engine {
     }
     // With the pulse layer on, graphs without a change in the week step back. Not in Version
     // mode: there every graph carries its version number, changed in the week or not.
-    const pulseOn = this.pulseMode !== 'off' && !this.skeleton && this.pulse.size > 0
+    const pulseOn = this.pulseMode !== 'off' && !this.skeleton && (this.pulse.size > 0 || this.simPulse.size > 0)
     for (const d of this.graphs) {
       if (d.order >= kk) continue
       const age = kk - d.order
       const fresh = this.playing && age < 14
-      ctx.globalAlpha = (this.isNear(d) ? 0.95 : 0.12) * (pulseOn && this.pulseMode !== 'count' && !this.pulse.has(d.id) ? 0.35 : 1)
+      ctx.globalAlpha = (this.isNear(d) ? 0.95 : 0.12) * (pulseOn && this.pulseMode !== 'count' && !this.pulseN(d.id) ? 0.35 : 1)
       ctx.fillStyle = fresh ? '#ffffff' : d.color
       const r = d.r + (fresh ? (14 - age) * 0.35 : 0)
       if (d.image) {
@@ -1094,14 +1108,12 @@ export class Engine {
     const { ctx, T } = this
     const px = 1 / T.k
     const sel = this.selected
-    const sum = new Map<GraphItem, number>()
+    const pulsing = this.pulseMode !== 'off'
     ctx.save()
     for (const l of this.virtLinks) {
       const a = l.source
       const b = l.target
       if (a.order >= kk || b.order >= kk) continue
-      sum.set(a, (sum.get(a) || 0) + l.perWeek)
-      sum.set(b, (sum.get(b) || 0) + l.perWeek)
       const lit = !sel || a === sel || b === sel
       ctx.globalAlpha = lit ? 0.75 : 0.08
       ctx.strokeStyle = PULSE_PLAIN
@@ -1113,11 +1125,14 @@ export class Engine {
       const period = 6000 / Math.max(0.2, l.perWeek)
       const u = this.reduced ? 0.5 : ((now + (hash(a.id + b.id) % 1000)) % (period * 2)) / period
       const t = u <= 1 ? u : 2 - u
-      ctx.globalAlpha = lit ? 1 : 0.1
-      ctx.fillStyle = '#ffd5df'
-      ctx.beginPath()
-      ctx.arc(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 3.2 * px, 0, 6.2832)
-      ctx.fill()
+      if (pulsing) {
+        // The pulse travels the tie only while the Pulse menu is on.
+        ctx.globalAlpha = lit ? 1 : 0.1
+        ctx.fillStyle = '#ffd5df'
+        ctx.beginPath()
+        ctx.arc(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 3.2 * px, 0, 6.2832)
+        ctx.fill()
+      }
       if (T.k / this.zoom0 >= 1.5) {
         ctx.font = this.fs(9) + "px 'IBM Plex Sans',system-ui,sans-serif"
         ctx.textAlign = 'center'
@@ -1125,9 +1140,6 @@ export class Engine {
         ctx.fillText(`${Math.round(l.perWeek * 10) / 10} a week`, (a.x + b.x) / 2, (a.y + b.y) / 2 - 4 * px)
       }
     }
-    // The pulse itself, as in the Body Pulse view of "What are we?": rings that expand out from
-    // each member a connection touches, one ring for each exchange a week across its connections.
-    for (const [d, n] of sum) this.drawRipple(d, Math.max(1, Math.round(n)), now)
     ctx.restore()
   }
   // Every World a graph is shared with: one small square to the left of the graph, tied to it by a
@@ -1218,7 +1230,7 @@ export class Engine {
     ctx.lineWidth = 2 * px
     for (const d of this.graphs) {
       if (d.order >= kk) continue
-      const n = this.pulse.get(d.id)
+      const n = this.pulseN(d.id)
       if (!n) continue
       if (this.pulseMode === 'ripple') {
         this.drawRipple(d, n, now)
