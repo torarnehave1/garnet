@@ -647,6 +647,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   function changeFilters(p: Partial<Filters>) {
     engine?.pause()
     const next = { ...filters, ...p }
+    // Any other filter chosen by hand ends "Show only this graph" (architect 2026-11-21: changing the
+    // World kept showing the one graph, because the one graph overrides every other filter).
+    if (filters.graph && !('graph' in p)) next.graph = ''
     // Choosing a node type shows only nodes of that type inside each graph; the box can still be unticked.
     if (p.type && p.type !== '*' && p.type !== filters.type && p.only === undefined) next.only = true
     keep.current = false
