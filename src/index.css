@@ -350,3 +350,13 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .capprove li { margin: 2px 0; overflow-wrap: anywhere; }
 .capprove code { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; white-space: pre-wrap; }
 .capprove-act { display: flex; gap: 8px; }
+/* One look for every message to the person (Notice.tsx, 2026-11-21): bold headline, short body. */
+.notice { display: flex; gap: 10px; align-items: flex-start; background: #141d31; border: 1px solid #2a3a5c; border-left: 4px solid #e8a33d; border-radius: 8px; padding: 10px 12px; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+.notice.problem { border-left-color: #e0607e; }
+.notice-icon { flex: none; width: 20px; height: 20px; border-radius: 50%; background: #e8a33d; color: #0b1220; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; font-family: Georgia, serif; }
+.notice.problem .notice-icon { background: #e0607e; }
+.notice-text strong { display: block; font-size: 14px; color: #f2ead8; }
+.notice-text p { margin: 4px 0 0; font-size: 13px; color: #c3cde0; }
+.notice-text .notice-act { margin-top: 8px; display: flex; gap: 8px; }
+.note-wrap { pointer-events: auto; margin-top: 8px; z-index: 4; }
+.cardlink { margin: 8px 0 0; }

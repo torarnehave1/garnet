@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Notice } from '../components/Notice'
 
 // Where a graph opens. A graph on the platform opens in editor.vegvisr.org. A graph stored in a
 // World opens in that World's own editor (editor.<domain>, the address the MCP server also gives).
@@ -62,9 +63,7 @@ export const viewLink = (base: string, graphId: string) => `${base}/view?graphId
 export function EditorLink({ editor, graphId, text = 'Open Knowledge Graph' }: { editor: EditorBase; graphId: string; text?: string }) {
   if (!editor.base)
     return (
-      <span className="muted" title={`editor.${editor.world} does not answer`}>
-        No link: the editor for the World {editor.world} is not set up. It must be set up before this graph can be opened.
-      </span>
+      <Notice head={`The editor for the World ${editor.world} is not set up.`} body="It must be set up before this graph can be opened, so there is no link." />
     )
   return (
     <a href={viewLink(editor.base, graphId)} target="_blank" rel="noopener">

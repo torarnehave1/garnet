@@ -110,9 +110,9 @@ export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSec
         </p>
       )}
       {link && (
-        <p>
+        <div className="cardlink">
           <EditorLink editor={editor} graphId={link.graphId} text={link.text} />
-        </p>
+        </div>
       )}
     </div>
   )

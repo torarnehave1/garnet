@@ -103,9 +103,9 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
           </>
         )}
       </div>
-      <p className="previewFoot">
+      <div className="previewFoot">
         <EditorLink editor={editor} graphId={graphId} />
-      </p>
+      </div>
     </aside>
   )
 }

@@ -9,6 +9,7 @@ import { Card } from './components/Card'
 import { ChatPanel } from './components/ChatPanel'
 import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
+import { Notice } from './components/Notice'
 import { Dock } from './components/Dock'
 import { readHidden, saveHidden } from './lib/dockHidden'
 import { Login } from './components/Login'
@@ -246,7 +247,9 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const restoreWant = useRef<MapState | null>(null) // a chat question's view, waiting for the map to draw it
   const [freshness, setFreshness] = useState('')
   const [progress, setProgress] = useState('')
-  const [note, setNote] = useState('')
+  // A message to the person: a headline, a short body, and whether something did not work (Notice.tsx).
+  const [note, setNoteRaw] = useState<{ head: string; body?: string; problem?: boolean } | null>(null)
+  const setNote = (head: string, body?: string, problem = false) => setNoteRaw(head ? { head, body, problem } : null)
   const [nodeNote, setNodeNote] = useState('')
   const [snap, setSnap] = useState<Snapshot>(EMPTY)
   const [selected, setSelected] = useState<Item | null>(null)
@@ -477,7 +480,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       if (mine !== loadToken.current) return
       if ((e as McpError)?.status === 401) return onSignOutRef.current()
       const msg = (e as Error)?.message
-      setNote('VEGR.AI could not be reached' + (msg ? ' (' + msg + ')' : '') + '. ' + (had ? 'Showing the copy saved in this browser.' : 'Showing only the largest meta areas from 13 Nov 2026.'))
+      setNote('VEGR.AI could not be reached.', (had ? 'Showing the copy saved in this browser.' : 'Showing only the largest meta areas from 13 Nov 2026.') + (msg ? ' (' + msg.slice(0, 160) + ')' : ''), true)
     } finally {
       if (mine === loadToken.current) {
         setRefreshing(false)
@@ -606,10 +609,14 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         restoreWant.current = null
         setNodeNote('')
         const msg = (e as Error)?.message || 'unknown error'
+        // The server's own sentence says it best; its error code and the advice for programs are left out.
+        const max = /more than (\d+) graphs/.exec(msg)?.[1]
         setNote(
-          'The nodes inside the graphs could not be loaded (' + msg + '). ' +
-            (/more than \d+ graphs/.test(msg) ? (f.tags.length ? 'This meta area has' : 'This node type is in') + ' more graphs than the node view can load at once' + (f.tags.length ? '.' : '; choose a meta area as well.') + ' ' : '') +
-            'Showing the graphs only.',
+          'The nodes inside the graphs could not be loaded.',
+          max
+            ? `${f.tags.length ? 'That meta area' : 'That node type'} covers more than ${max} graphs; node lists are returned for at most ${max} graphs at a time.`
+            : msg.replace(/^[A-Z_]+:\s*/, '').slice(0, 200),
+          true,
         )
       })
   }, [engine, rows, loaded, effKey, found, historyIds])
@@ -912,14 +919,19 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         {!panelsHidden && sw.rate && <RateChart engine={engine} snap={snap} />}
         {!panelsHidden && <PulseBar mode={pulseMode} sum={pulse} nodes={nodePulse} onShow={showGraph} />}
         {note && (
-          <div className="note">
-            <span>{note}</span>{' '}
-            <button className="ghost" type="button" onClick={() => setNote('')}>
-              Close
-            </button>{' '}
-            <button className="ghost" type="button" onClick={() => refresh()}>
-              Try again
-            </button>
+          <div className="note-wrap">
+            <Notice head={note.head} body={note.body} kind={note.problem ? 'problem' : 'info'}>
+              <div className="notice-act">
+                <button className="ghost" type="button" onClick={() => setNote('')}>
+                  Close
+                </button>
+                {note.problem && (
+                  <button className="ghost" type="button" onClick={() => refresh()}>
+                    Try again
+                  </button>
+                )}
+              </div>
+            </Notice>
           </div>
         )}
       </div>

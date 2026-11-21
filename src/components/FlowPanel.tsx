@@ -168,10 +168,10 @@ export default function FlowPanel({ user, graphId, world, title, focus, onClose 
       </div>
       <div className="flowdetails">
         <Details box={box} />
-        <p className="flowfoot">
+        <div className="flowfoot">
           Read-only. A flow is run over the MCP tool run_flow.{' '}
           <EditorLink editor={editor} graphId={graphId} />
-        </p>
+        </div>
       </div>
     </aside>
   )
