@@ -43,6 +43,10 @@ export interface KgNode {
   metadata?: Record<string, unknown> & { status?: unknown }
   // When the node's content last changed, as the index gives it (the node's metadata.updatedAt).
   updatedAt?: string | null
+  // History lines, as the index gives them (2026-11-21): an event's year and lane, a header's lanes.
+  year?: number
+  lane?: string
+  lanes?: { key: string; name: string }[]
 }
 export interface KgEdge {
   id?: string

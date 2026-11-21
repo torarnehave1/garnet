@@ -50,7 +50,7 @@ import {
   yearOptions,
   type Option,
 } from './lib/rows'
-import type { Filters, Row, Scope, User } from './lib/types'
+import type { Filters, KgNode, Row, Scope, User } from './lib/types'
 
 /* ---------- a chat question's view, set back on the map ---------- */
 // After each build: the time slider to the saved cut and the clicked item, found again by id.
@@ -558,7 +558,20 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             })
             .catch(() => {})
         // History lines: graphs holding a history-line header node; events carry metadata.year and lane.
-        for (const id of engine.graphsWithHistory(historyIds))
+        // The index brings year, lane and the header's lanes with the nodes (MCP server, 2026-11-21),
+        // so the time axis is set here, in the same moment the nodes are drawn: no second read, and
+        // no wait for the list of history graphs. A graph whose rows lack them (an older server)
+        // is read whole, as before.
+        const drawn = new Set<string>()
+        for (const [id, g] of Object.entries(detail as Record<string, { nodes: KgNode[] }>)) {
+          const head = g.nodes.find((n) => n.type === HISTORY_TYPE)
+          if (!head || !Array.isArray(head.lanes)) continue
+          const by: Record<string, { year: number; lane: string }> = {}
+          for (const n of g.nodes) if (typeof n.year === 'number') by[n.id] = { year: n.year, lane: String(n.lane ?? '') }
+          engine.setHistory(id, by, head.lanes)
+          drawn.add(id)
+        }
+        for (const id of engine.graphsWithHistory(historyIds).filter((x) => !drawn.has(x)))
           loadGraph(u, id)
             .then((g) => {
               if (mine !== renderToken.current) return
