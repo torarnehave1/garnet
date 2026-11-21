@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Snapshot } from '../engine/Engine'
 import { dayOf, type Option } from '../lib/rows'
 import type { Filters, Scope } from '../lib/types'
@@ -49,8 +50,38 @@ export interface DockProps {
   refreshing: boolean
 }
 
+// Whether the dock (play, filters) is folded away, remembered in this browser.
+const HIDE_KEY = 'garnet.dockHidden'
+function readHidden() {
+  try {
+    return localStorage.getItem(HIDE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveHidden(v: boolean) {
+  try {
+    localStorage.setItem(HIDE_KEY, v ? '1' : '0')
+  } catch {
+    /* storage may be unavailable; the choice then lasts this visit only */
+  }
+}
+
 export function Dock(p: DockProps) {
+  const [hidden, setHidden] = useState(readHidden)
+  const toggle = (v: boolean) => {
+    setHidden(v)
+    saveHidden(v)
+  }
   const { snap, filters: f } = p
+  if (hidden)
+    return (
+      <div className="dock dockMin">
+        <button type="button" className="ghost" aria-expanded={false} title="Show the play and filter controls" onClick={() => toggle(false)}>
+          Show controls
+        </button>
+      </div>
+    )
   return (
     <div className="dock">
       <button type="button" onClick={p.onPlay}>
@@ -152,6 +183,9 @@ export function Dock(p: DockProps) {
         </button>{' '}
         <button className="ghost" type="button" disabled={p.refreshing} onClick={p.onRefresh}>
           {p.refreshing ? 'Refreshing…' : 'Refresh from VEGR.AI'}
+        </button>{' '}
+        <button className="ghost" type="button" aria-expanded={true} title="Fold the play and filter controls away, to see more of the map" onClick={() => toggle(true)}>
+          Hide controls
         </button>
       </div>
       <div className="latest">

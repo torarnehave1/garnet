@@ -101,6 +101,8 @@ h1 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 3.4vw
 .switch.static { cursor: default; font-variant-numeric: tabular-nums; }
 .switch input { accent-color: var(--accent); margin: 0; }
 .dock { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; backdrop-filter: blur(6px); }
+/* Folded away: only the button to bring it back, at the bottom left. */
+.dock.dockMin { display: block; align-self: flex-start; padding: 6px; border-radius: 999px; }
 
 button { font: inherit; color: var(--bg); background: var(--accent); border: 0; border-radius: 999px; padding: 8px 16px; font-weight: 500; cursor: pointer; min-width: 96px; }
 button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); min-width: 0; padding: 4px 12px; }
