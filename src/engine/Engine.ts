@@ -292,6 +292,8 @@ export class Engine {
           this.viewSet = true
           this.ev.onUserMove()
         }
+        // A history line's room grows as the map is zoomed in: let the others make way.
+        if (this.sim && this.graphs.some((g) => g.hist) && Math.abs(e.transform.k - this.T.k) > 1e-6) this.sim.alpha(Math.max(this.sim.alpha(), 0.08)).restart()
         this.T = e.transform
         this.ev.onZoom(this.T.k / this.zoom0)
       })
@@ -587,6 +589,7 @@ export class Engine {
       .force('x', forceX<Item>(0).strength(0.022))
       .force('y', forceY<Item>(0).strength(0.042))
       .force('collide', forceCollide<Item>((d) => (d.kind === 'h' ? this.hubR(d, true) + 2 : d.r + 1)).iterations(1))
+      .force('histRoom', () => this.histRoom())
       .alphaDecay(0.018)
       .stop()
     if (calm) this.sim.alpha(0.12)
@@ -895,6 +898,62 @@ export class Engine {
       return { g, lane }
     }
     return null
+  }
+  // The room a history line takes on the map: its circle, the lane names, the axis with the names
+  // of its last events, and the dates above. Everything else is kept out of it.
+  private histRect(g: GraphItem) {
+    const b = this.histBoxOf(g)
+    if (!b) return null
+    const pad = 6 / this.T.k
+    return { x0: g.x - g.r - pad, x1: b.x0 + b.w * 1.3 + pad, y0: Math.min(g.y - g.r, b.top - b.gap * 2.6) - pad, y1: Math.max(g.y + g.r, b.bottom + b.gap) + pad }
+  }
+  // A force: history lines do not overlap each other, and no other graph, hub or node stands
+  // inside one. Overlapping lines move apart along the shorter overlap (usually up and down);
+  // anything inside a line's room is pushed out at the nearest edge.
+  private histRoom() {
+    const kk = Math.floor(this.k)
+    const hs = this.graphs.filter((g) => g.hist && g.order < kk)
+    if (!hs.length) return
+    const rects = hs.map((g) => this.histRect(g)!)
+    for (let i = 0; i < hs.length; i++)
+      for (let j = i + 1; j < hs.length; j++) {
+        const a = rects[i]
+        const b = rects[j]
+        const ox = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)
+        const oy = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0)
+        if (ox <= 0 || oy <= 0) continue
+        const ga = hs[i]
+        const gb = hs[j]
+        if (oy <= ox) {
+          const s = (a.y0 + a.y1 < b.y0 + b.y1 ? -1 : 1) * oy * 0.25
+          ga.vy = (ga.vy || 0) + s
+          gb.vy = (gb.vy || 0) - s
+        } else {
+          const s = (a.x0 + a.x1 < b.x0 + b.x1 ? -1 : 1) * ox * 0.25
+          ga.vx = (ga.vx || 0) + s
+          gb.vx = (gb.vx || 0) - s
+        }
+      }
+    for (const d of this.nodes) {
+      if (d.kind === 'n' && (d.hist || d.parent.hist)) continue
+      if (d.kind === 'g' && d.hist) continue
+      if (d.kind === 'h' ? !d.vis : d.order >= kk) continue
+      const r = d.kind === 'h' ? this.hubR(d, true) : d.r
+      for (let i = 0; i < hs.length; i++) {
+        if (d.kind === 'n' && d.parent === hs[i]) continue
+        const q = rects[i]
+        if (d.x + r <= q.x0 || d.x - r >= q.x1 || d.y + r <= q.y0 || d.y - r >= q.y1) continue
+        const up = d.y + r - q.y0
+        const down = q.y1 - (d.y - r)
+        const left = d.x + r - q.x0
+        const right = q.x1 - (d.x - r)
+        const m = Math.min(up, down, left, right)
+        if (m === up) d.vy = (d.vy || 0) - up * 0.3
+        else if (m === down) d.vy = (d.vy || 0) + down * 0.3
+        else if (m === left) d.vx = (d.vx || 0) - left * 0.3
+        else d.vx = (d.vx || 0) + right * 0.3
+      }
+    }
   }
   private setHistView(g: GraphItem, view: HistView | undefined) {
     if (!g.hist) return
