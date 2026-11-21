@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Background, Controls, Handle, Position, ReactFlow, useNodesState, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { loadGraph } from '../api/kg'
-import { useEditorBase, viewLink } from '../lib/editorLink'
+import { EditorLink, useEditorBase } from '../lib/editorLink'
 import { kindOf, readFlow, ROUTE_COLORS, stepSub, type FlowBox } from '../lib/flow'
 import type { User } from '../lib/types'
 
@@ -170,9 +170,7 @@ export default function FlowPanel({ user, graphId, world, title, focus, onClose 
         <Details box={box} />
         <p className="flowfoot">
           Read-only. A flow is run over the MCP tool run_flow.{' '}
-          <a href={viewLink(editor, graphId)} target="_blank" rel="noreferrer">
-            Open Knowledge Graph
-          </a>
+          <EditorLink editor={editor} graphId={graphId} />
         </p>
       </div>
     </aside>

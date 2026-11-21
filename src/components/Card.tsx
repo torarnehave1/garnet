@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
 import type { Item, NodeItem, Pair } from '../engine/Engine'
-import { useEditorBase, viewLink } from '../lib/editorLink'
+import { EditorLink, useEditorBase } from '../lib/editorLink'
 import { textHtml } from '../lib/graphRules'
 import { dayOf, SHARED } from '../lib/rows'
 import type { User } from '../lib/types'
@@ -38,7 +38,7 @@ export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSec
   let title = ''
   let meta = ''
   let body = null
-  let link: { href: string; text: string } | null = null
+  let link: { graphId: string; text: string } | null = null
   if (item.kind === 'h') {
     title = item.tag
     meta = skeleton ? `${item.seed} graphs on 13 Nov 2026` : `${item.vis} of ${item.members.length} graphs shown at this point in the history`
@@ -46,7 +46,7 @@ export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSec
     title = item.label
     meta = 'Node' + (item.type ? ' of type ' + item.type : '') + ' in the graph ' + item.parent.title + (item.links.length ? ` · ${item.links.length} edges` : '')
     body = <NodeText graphId={item.parent.id} nodeId={item.nid} user={user} />
-    link = { href: viewLink(editor, item.parent.id), text: 'Open Knowledge Graph' }
+    link = { graphId: item.parent.id, text: 'Open Knowledge Graph' }
   } else if (item.virtual && pair && pair.a === item) {
     // Two members of a Virtual World selected together: what ties them.
     const short = (t: string) => (t.length > 34 ? t.slice(0, 33) + '…' : t)
@@ -56,13 +56,13 @@ export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSec
       ` Pulse: ${pair.a.title} ${pair.pulseA || 'none'} · ${pair.b.title} ${pair.pulseB || 'none'}.` +
       ' Strength: not set for this tie.' +
       ` Members of the Virtual World ${item.world.replace(/ \(virtual\)$/, '')}; the numbers come from the graph that defines it.`
-    link = { href: viewLink(editor, item.virtual.graphId), text: 'Open the graph that defines this Virtual World' }
+    link = { graphId: item.virtual.graphId, text: 'Open the graph that defines this Virtual World' }
   } else if (item.virtual) {
     // A member of a Virtual World: not a graph on the server, only a node in the defining graph.
     title = item.title
     meta = `Member of the Virtual World ${item.world.replace(/ \(virtual\)$/, '')}. This World is not real: it is defined in a knowledge graph and has no account of its own.` + (item.tags.length ? ' · ' + item.tags.join(' ') : '') + (item.virtual.members != null ? ` · Simulated members: ${item.virtual.members} (an invented number)` : '')
     body = <NodeText graphId={item.virtual.graphId} nodeId={item.virtual.nodeId} user={user} />
-    link = { href: viewLink(editor, item.virtual.graphId), text: 'Open the graph that defines this Virtual World' }
+    link = { graphId: item.virtual.graphId, text: 'Open the graph that defines this Virtual World' }
   } else {
     const d = item
     title = d.title
@@ -76,7 +76,7 @@ export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSec
       (d.sem.length ? ` · ${d.sem.length} semantic links` : '') +
       (d.types.length ? ' · node types: ' + d.types.join(', ') : '') +
       (d.live ? ' · live at ' + d.live : '')
-    link = { href: viewLink(editor, d.id), text: 'Open Knowledge Graph' }
+    link = { graphId: d.id, text: 'Open Knowledge Graph' }
   }
   return (
     <div className="card">
@@ -111,9 +111,7 @@ export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSec
       )}
       {link && (
         <p>
-          <a href={link.href} target="_blank" rel="noopener">
-            {link.text}
-          </a>
+          <EditorLink editor={editor} graphId={link.graphId} text={link.text} />
         </p>
       )}
     </div>

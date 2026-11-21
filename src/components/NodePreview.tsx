@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadGraph } from '../api/kg'
-import { useEditorBase, viewLink } from '../lib/editorLink'
+import { EditorLink, useEditorBase } from '../lib/editorLink'
 import { albumVideoUrl, audioUrl, courseVideoUrl, textHtml, youtubeId } from '../lib/graphRules'
 import type { KgNode, User } from '../lib/types'
 import { loadApprovedTypes, RegisteredTypeNode } from '../lib/vegvisrNode'
@@ -104,9 +104,7 @@ export default function NodePreview({ user, graphId, nodeId, world, title, type,
         )}
       </div>
       <p className="previewFoot">
-        <a href={viewLink(editor, graphId)} target="_blank" rel="noopener">
-          Open Knowledge Graph
-        </a>
+        <EditorLink editor={editor} graphId={graphId} />
       </p>
     </aside>
   )
