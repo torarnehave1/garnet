@@ -270,6 +270,9 @@ export class Engine {
   private hoverHist: NodeItem | null = null
   // A period being chosen by dragging along a history line's date row (0..1 along the axis).
   private brush: { g: GraphItem; f0: number; f1: number } | null = null
+  // How events that would cover each other in a lane are drawn: 'stack' puts them in up to three
+  // thin rows inside the lane; 'small' makes the dots smaller and moves them just apart.
+  histPack: 'stack' | 'small' = 'stack'
   // Where each history line's "whole period" button stands, in map units, while a period is shown.
   private histReset = new Map<string, { x: number; y: number; w: number; h: number }>()
   // Width of the info panels on the left of a wide screen; 0 when they are folded away.
@@ -1337,7 +1340,8 @@ export class Engine {
         const byLane = new Map<string, NodeItem[]>()
         for (const d of this.inner) {
           if (!d.hist || d.order >= kk) continue
-          const key = d.parent.id + '|' + d.hist.lane
+          // One row of a lane: stacked events stand in rows of their own.
+          const key = d.parent.id + '|' + d.hist.lane + '|' + Math.round(d.y * 1000)
           const list = byLane.get(key)
           if (list) list.push(d)
           else byLane.set(key, [d])
@@ -1705,6 +1709,63 @@ export class Engine {
       const { w, gap, off } = b
       d.x = d.fx = d.parent.x + d.parent.r + off + histFrac(h.y0, h.y1, h.view, d.hist.year) * w
       d.y = d.fy = d.parent.y + (d.hist.lane - (h.lanes.length - 1) / 2) * gap
+      d.r = 2
+    }
+    this.unpackHistory(boxes)
+  }
+  // Events in the same lane that would cover each other (and so each other's names) are drawn
+  // apart, one lane at a time, by histPack.
+  private unpackHistory(boxes: Map<string, { gap: number }>) {
+    const lanes = new Map<string, NodeItem[]>()
+    for (const d of this.inner) {
+      if (!d.hist || !d.parent.hist) continue
+      const key = d.parent.id + '|' + d.hist.lane
+      const l = lanes.get(key)
+      if (l) l.push(d)
+      else lanes.set(key, [d])
+    }
+    const px = 1 / this.T.k
+    for (const list of lanes.values()) {
+      if (list.length < 2) continue
+      list.sort((a, b) => a.x - b.x)
+      const gap = boxes.get(list[0].parent.id)?.gap ?? 9
+      const clash = (r: number) => list.some((d, i) => i > 0 && d.x - list[i - 1].x < 2 * r + px)
+      if (!clash(2)) continue
+      const y0 = list[0].y
+      if (this.histPack === 'small') {
+        // Half the size, and each dot moved right just enough to clear the one before it.
+        const r = 1
+        let last = -Infinity
+        for (const d of list) {
+          d.r = r
+          d.x = d.fx = Math.max(d.x, last + 2 * r + px)
+          last = d.x
+        }
+        continue
+      }
+      // Two rows, or three when two are not enough; the dots shrink to fit the lane's height.
+      for (const m of [2, 3]) {
+        const r = Math.min(2, (gap * 0.9) / (2 * m))
+        const ends = new Array(m).fill(-Infinity)
+        let fits = true
+        const slot = list.map((d) => {
+          let s = ends.findIndex((e) => d.x - e >= 2 * r + px)
+          if (s < 0) {
+            fits = false
+            s = ends.indexOf(Math.min(...ends))
+          }
+          ends[s] = d.x
+          return s
+        })
+        if (!fits && m < 3) continue
+        const used = Math.max(...slot) + 1
+        const step = (gap * 0.9) / used
+        list.forEach((d, i) => {
+          d.r = r
+          d.y = d.fy = y0 + (slot[i] - (used - 1) / 2) * step
+        })
+        break
+      }
     }
   }
   // Faint lane lines, lane names on the left and decade marks above, once zoomed in.
