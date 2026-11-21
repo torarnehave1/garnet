@@ -10,7 +10,7 @@ import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
 import type { KgGraph, Row } from '../lib/types'
 import { SEED } from './seed'
-import { histSpan, histTicks } from '../lib/historyAxis'
+import { EDGE, histFrac, histTicks, histYearAt, histZoomAt, type HistView } from '../lib/historyAxis'
 
 /* ---------- what is drawn ---------- */
 interface Base extends SimulationNodeDatum {
@@ -43,7 +43,7 @@ export interface GraphItem extends Base {
   sem: GraphItem[]
   flowRows: number
   // A history line: nodes that carry metadata.year stand on a time axis, one row per lane.
-  hist?: { y0: number; y1: number; lanes: string[]; colors?: string[] }
+  hist?: { y0: number; y1: number; lanes: string[]; colors?: string[]; view?: HistView }
   // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
   image: string
   // The graph's header image: drawn inside the circle once the circle is large on screen.
@@ -268,6 +268,10 @@ export class Engine {
   // The history event under the mouse: its whole name is shown on top, also when the lane had no
   // room for it.
   private hoverHist: NodeItem | null = null
+  // A period being chosen by dragging along a history line's date row (0..1 along the axis).
+  private brush: { g: GraphItem; f0: number; f1: number } | null = null
+  // Where each history line's "whole period" button stands, in map units, while a period is shown.
+  private histReset = new Map<string, { x: number; y: number; w: number; h: number }>()
   // Width of the info panels on the left of a wide screen; 0 when they are folded away.
   private leftPanels = 364
   setLeftPanels(w: number) {
@@ -284,6 +288,16 @@ export class Engine {
     this.sel = select(cv)
     this.zoomer = d3zoom<HTMLCanvasElement, unknown>()
       .scaleExtent([0.15, 48])
+      // As d3's own filter, except a press on a history line's date row, which chooses a period.
+      .filter((e: MouseEvent & TouchEvent) => {
+        if ((e.ctrlKey && e.type !== 'wheel') || e.button) return false
+        if (e.type === 'mousedown' || e.type === 'touchstart') {
+          const p = e.type === 'touchstart' ? e.touches[0] : e
+          const at = p && this.histAt(p.clientX, p.clientY)
+          if (at && at.dates) return false
+        }
+        return true
+      })
       .on('zoom', (e) => {
         if (e.sourceEvent) {
           this.fitToken++
@@ -643,7 +657,8 @@ export class Engine {
     extra.sort((a, b) => Math.min(...[...first].filter(([l]) => nameOf(l) === a).map(([, y]) => y)) - Math.min(...[...first].filter(([l]) => nameOf(l) === b).map(([, y]) => y)))
     const rows = [...lanes.map((x) => x.name), ...extra]
     const years = mine.map((o) => byNode[o.nid].year)
-    g.hist = { y0: Math.min(...years), y1: Math.max(...years), lanes: rows, colors: rows.map((r, i) => laneColor(i, lanes.find((x) => x.name === r)?.color)) }
+    const keep = g.hist?.view
+    g.hist = { view: keep, y0: Math.min(...years), y1: Math.max(...years), lanes: rows, colors: rows.map((r, i) => laneColor(i, lanes.find((x) => x.name === r)?.color)) }
     for (const o of mine) {
       const lane = rows.indexOf(nameOf(byNode[o.nid].lane))
       o.hist = { year: byNode[o.nid].year, lane }
@@ -867,6 +882,36 @@ export class Engine {
     })
     this.sim.alpha(Math.max(this.sim.alpha(), 0.22)).restart()
   }
+  private toMap(clientX: number, clientY: number) {
+    const box = this.cv.getBoundingClientRect()
+    return { x: (clientX - box.left - this.T.x) / this.T.k, y: (clientY - box.top - this.T.y) / this.T.k }
+  }
+  // A history line's axis on the map: its left end, width, top lane and bottom lane.
+  private histBoxOf(g: GraphItem) {
+    const h = g.hist
+    if (!h) return null
+    const { w, gap, off } = this.histBox(h.lanes, g)
+    const top = g.y - ((h.lanes.length - 1) / 2) * gap
+    return { x0: g.x + g.r + off, w, gap, top, bottom: top + (h.lanes.length - 1) * gap }
+  }
+  // The history line under a point: which, where along its axis (0..1), and whether the point is
+  // on the row of dates above the lanes (shown from zoom 3).
+  private histAt(clientX: number, clientY: number): { g: GraphItem; f: number; dates: boolean } | null {
+    const p = this.toMap(clientX, clientY)
+    const kk = Math.floor(this.k)
+    for (const g of this.graphs) {
+      if (!g.hist || g.order >= kk) continue
+      const b = this.histBoxOf(g)!
+      if (p.x < b.x0 || p.x > b.x0 + b.w || p.y < b.top - b.gap * 1.6 || p.y > b.bottom + b.gap * 0.6) continue
+      return { g, f: (p.x - b.x0) / b.w, dates: this.T.k >= 3 && p.y < b.top - b.gap * 0.4 }
+    }
+    return null
+  }
+  private setHistView(g: GraphItem, view: HistView | undefined) {
+    if (!g.hist) return
+    g.hist.view = view
+    this.sim?.alpha(Math.max(this.sim.alpha(), 0.05)).restart()
+  }
   private pick(clientX: number, clientY: number): Item | null {
     const box = this.cv.getBoundingClientRect()
     const x = (clientX - box.left - this.T.x) / this.T.k
@@ -906,6 +951,16 @@ export class Engine {
         this.swallowClick = false
         return
       }
+      // The "whole period" button of a history line.
+      {
+        const p = this.toMap(e.clientX, e.clientY)
+        for (const [id, r] of this.histReset) {
+          if (p.x < r.x || p.x > r.x + r.w || p.y < r.y || p.y > r.y + r.h) continue
+          const g = this.graphs.find((x) => x.id === id)
+          if (g) this.setHistView(g, undefined)
+          return
+        }
+      }
       const d = this.pick(e.clientX, e.clientY)
       const first = this.selected
       // A second member of the same Virtual World: Shift-click, or the click after pickSecond().
@@ -916,6 +971,44 @@ export class Engine {
       }
       this.select(d, true)
       this.nudge(d)
+    })
+    // A double-click on a history line opens the period around it: the group of events there.
+    on('dblclick', (e) => {
+      const at = this.histAt(e.clientX, e.clientY)
+      if (!at) return
+      e.preventDefault()
+      const h = at.g.hist!
+      const years = this.inner.filter((o) => o.parent === at.g && o.hist).map((o) => o.hist!.year)
+      this.setHistView(at.g, histZoomAt(h.y0, h.y1, h.view, years, histYearAt(h.y0, h.y1, h.view, at.f)))
+    })
+    // Dragging along a history line's date row chooses a period (the map is not moved: the zoom's
+    // filter leaves such a press to this).
+    on('pointerdown', (e) => {
+      const at = this.histAt(e.clientX, e.clientY)
+      if (!at || !at.dates || e.button) return
+      this.brush = { g: at.g, f0: at.f, f1: at.f }
+      cv.setPointerCapture?.(e.pointerId)
+    })
+    on('pointermove', (e) => {
+      const b = this.brush
+      if (!b) return
+      const box = this.histBoxOf(b.g)
+      if (box) b.f1 = Math.min(1, Math.max(0, (this.toMap(e.clientX, e.clientY).x - box.x0) / box.w))
+    })
+    const endBrush = () => {
+      const b = this.brush
+      if (!b) return
+      this.brush = null
+      const h = b.g.hist
+      if (!h || Math.abs(b.f1 - b.f0) < 0.01) return
+      this.swallowClick = true
+      const a = histYearAt(h.y0, h.y1, h.view, Math.min(b.f0, b.f1))
+      const z = histYearAt(h.y0, h.y1, h.view, Math.max(b.f0, b.f1))
+      this.setHistView(b.g, { a, b: Math.max(z, a + 1 / 8760) })
+    }
+    on('pointerup', endBrush)
+    on('pointercancel', () => {
+      this.brush = null
     })
     on('contextmenu', (e) => {
       e.preventDefault()
@@ -1610,8 +1703,7 @@ export class Engine {
       let b = boxes.get(d.parent.id)
       if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes, d.parent)))
       const { w, gap, off } = b
-      const span = histSpan(h.y0, h.y1)
-      d.x = d.fx = d.parent.x + d.parent.r + off + ((d.hist.year - h.y0) / span) * w
+      d.x = d.fx = d.parent.x + d.parent.r + off + histFrac(h.y0, h.y1, h.view, d.hist.year) * w
       d.y = d.fy = d.parent.y + (d.hist.lane - (h.lanes.length - 1) / 2) * gap
     }
   }
@@ -1634,15 +1726,48 @@ export class Engine {
         ctx.stroke()
       })
       if (T.k < 3) continue
-      const span = histSpan(h.y0, h.y1)
       ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
       ctx.fillStyle = '#8fa0b8'
       ctx.globalAlpha = this.isNear(g) ? 0.85 : 0.08
       ctx.textAlign = 'center'
-      // Marks follow the span: decades or years, or months, days or hours for a short history.
-      for (const t of histTicks(h.y0, h.y1)) {
-        const x = x0 + ((t.year - h.y0) / span) * w
+      // Marks follow the span shown: decades or years, or months, days or hours for a short one.
+      const v = h.view
+      for (const t of v ? histTicks(v.a, v.b) : histTicks(h.y0, h.y1)) {
+        const x = x0 + histFrac(h.y0, h.y1, v, t.year) * w
         ctx.fillText(t.label, x, top - gap * 0.9)
+      }
+      this.histReset.delete(g.id)
+      if (v) {
+        // The strips at the edges hold what lies before and after the period: a faint wall marks
+        // each, and the button above the axis brings the whole period back.
+        const bottom = top + (h.lanes.length - 1) * gap
+        ctx.strokeStyle = '#8fa0b8'
+        ctx.lineWidth = 0.6 / T.k
+        ctx.setLineDash([3 / T.k, 3 / T.k])
+        for (const f of [v.a > h.y0 ? EDGE : -1, v.b < h.y1 ? 1 - EDGE : -1]) {
+          if (f < 0) continue
+          ctx.beginPath()
+          ctx.moveTo(x0 + f * w, top - gap * 0.5)
+          ctx.lineTo(x0 + f * w, bottom + gap * 0.5)
+          ctx.stroke()
+        }
+        ctx.setLineDash([])
+        const label = '↺ Whole period'
+        ctx.textAlign = 'left'
+        ctx.fillStyle = '#e3a008'
+        const lx = x0
+        const ly = top - gap * 2.1
+        ctx.fillText(label, lx, ly)
+        const tw = ctx.measureText(label).width
+        this.histReset.set(g.id, { x: lx - 2 / T.k, y: ly - this.fs(8), w: tw + 4 / T.k, h: this.fs(8) * 1.4 })
+      }
+      const b = this.brush
+      if (b && b.g === g) {
+        ctx.globalAlpha = 0.18
+        ctx.fillStyle = '#e3a008'
+        const bottom = top + (h.lanes.length - 1) * gap
+        const fa = Math.min(b.f0, b.f1)
+        ctx.fillRect(x0 + fa * w, top - gap * 1.6, Math.abs(b.f1 - b.f0) * w, bottom - top + gap * 2.1)
       }
       ctx.textAlign = 'center'
     }

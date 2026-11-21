@@ -63,3 +63,71 @@ export function histTicks(y0: number, y1: number): { year: number; label: string
   }
   return out
 }
+
+// A chosen period of a history line (2026-11-21): the axis shows [a, b] across most of its width,
+// and the events before and after it are pressed into a narrow strip at each edge, so they stay
+// in sight. Without a period the axis is linear over the whole span.
+export type HistView = { a: number; b: number }
+export const EDGE = 0.06
+
+function edges(y0: number, y1: number, v: HistView) {
+  return { left: v.a > y0 + 1e-9 ? EDGE : 0, right: v.b < y1 - 1e-9 ? EDGE : 0 }
+}
+
+// Where a year stands on the axis, from 0 (left end) to 1 (right end).
+export function histFrac(y0: number, y1: number, view: HistView | undefined, y: number) {
+  if (!view) return (y - y0) / histSpan(y0, y1)
+  const { left, right } = edges(y0, y1, view)
+  if (y < view.a) return left * ((y - y0) / Math.max(view.a - y0, 1e-9))
+  if (y > view.b) return 1 - right + right * ((y - view.b) / Math.max(y1 - view.b, 1e-9))
+  return left + (1 - left - right) * ((y - view.a) / Math.max(view.b - view.a, 1e-9))
+}
+
+// The year at a place on the axis (0..1): the inverse of histFrac.
+export function histYearAt(y0: number, y1: number, view: HistView | undefined, f: number) {
+  f = Math.min(1, Math.max(0, f))
+  if (!view) return y0 + f * histSpan(y0, y1)
+  const { left, right } = edges(y0, y1, view)
+  if (f < left) return y0 + (f / left) * (view.a - y0)
+  if (f > 1 - right) return view.b + ((f - (1 - right)) / right) * (y1 - view.b)
+  return view.a + ((f - left) / Math.max(1 - left - right, 1e-9)) * (view.b - view.a)
+}
+
+// The period a double-click opens: the group of events around the clicked year, where groups are
+// split by gaps longer than a tenth of what is shown now. When the click finds no smaller group,
+// the shown period narrows to a quarter around the click.
+export function histZoomAt(y0: number, y1: number, view: HistView | undefined, years: number[], at: number): HistView {
+  const a0 = view ? view.a : y0
+  const b0 = view ? view.b : y0 + histSpan(y0, y1)
+  const span = b0 - a0
+  const ys = years.filter((y) => y >= a0 && y <= b0).sort((p, q) => p - q)
+  const groups: number[][] = []
+  for (const y of ys) {
+    const g = groups[groups.length - 1]
+    if (g && y - g[g.length - 1] <= span / 10) g.push(y)
+    else groups.push([y])
+  }
+  let best: number[] | null = null
+  let bd = Infinity
+  for (const g of groups) {
+    const d = at < g[0] ? g[0] - at : at > g[g.length - 1] ? at - g[g.length - 1] : 0
+    if (d < bd) {
+      bd = d
+      best = g
+    }
+  }
+  let a: number
+  let b: number
+  if (best && best.length > 1 && best[best.length - 1] - best[0] < span * 0.6) {
+    const pad = Math.max((best[best.length - 1] - best[0]) * 0.08, 1 / 8760)
+    a = best[0] - pad
+    b = best[best.length - 1] + pad
+  } else {
+    a = at - span / 8
+    b = at + span / 8
+  }
+  a = Math.max(y0, a)
+  b = Math.min(y0 + histSpan(y0, y1), b)
+  if (b - a < 1 / 8760) b = a + 1 / 8760
+  return { a, b }
+}
