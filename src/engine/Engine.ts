@@ -725,39 +725,67 @@ export class Engine {
     this.cv.height = Math.round(this.H * this.dpr)
   }
   // Bring the shown graphs into view once they have found their places. Moving by hand cancels it.
-  fitView() {
+  // Frame everything shown: the graphs, their nodes and history lines. A history line grows wider
+  // as one zooms in (histBox), so after the move the frame is measured once more and, if anything
+  // still lies outside the screen, framed again (architect 2026-11-21: after a filter the graphs
+  // must always come into view).
+  fitView(delay?: number, again = true) {
     const mine = ++this.fitToken
     setTimeout(
       () => {
         if (mine !== this.fitToken || !this.graphs.length) return
         this.viewSet = true
-        let x0 = Infinity
-        let y0 = Infinity
-        let x1 = -Infinity
-        let y1 = -Infinity
-        for (const d of [...this.graphs, ...this.inner]) {
-          if (!isFinite(d.x) || !isFinite(d.y)) continue
-          if (d.x < x0) x0 = d.x
-          if (d.x > x1) x1 = d.x
-          if (d.y < y0) y0 = d.y
-          if (d.y > y1) y1 = d.y
-        }
-        if (!isFinite(x0)) return
+        const b = this.extent()
+        if (!b) return
         // The controls cover the lower part of the screen, so the frame is the area above them.
         const low = Math.min(190, this.H * 0.3)
         const pad = 48
-        const bw = Math.max(80, x1 - x0)
-        const bh = Math.max(80, y1 - y0)
+        const bw = Math.max(80, b.x1 - b.x0)
+        const bh = Math.max(80, b.y1 - b.y0)
         const kf = Math.max(0.15, Math.min(10, Math.min((this.W - 2 * pad) / bw, (this.H - low - 2 * pad) / bh)))
         const t = zoomIdentity
           .translate(this.W / 2, (this.H - low) / 2)
           .scale(kf)
-          .translate(-(x0 + x1) / 2, -(y0 + y1) / 2)
+          .translate(-(b.x0 + b.x1) / 2, -(b.y0 + b.y1) / 2)
         if (this.reduced) this.sel.call(this.zoomer.transform, t)
         else this.sel.transition().duration(700).call(this.zoomer.transform, t)
+        if (!again) return
+        // Measure again once the move is done; reframe only when something is still off screen.
+        setTimeout(() => {
+          if (mine !== this.fitToken) return
+          const c = this.extent()
+          if (!c) return
+          const T = this.T
+          const off = T.applyX(c.x0) < 0 || T.applyX(c.x1) > this.W || T.applyY(c.y0) < 0 || T.applyY(c.y1) > this.H - low
+          if (off) this.fitView(0, false)
+        }, this.reduced ? 50 : 800)
       },
-      this.reduced ? 0 : 1100,
+      delay ?? (this.reduced ? 0 : 1100),
     )
+  }
+  // The box around every graph, node and history-line axis shown, in map units; null when empty.
+  private extent() {
+    let x0 = Infinity
+    let y0 = Infinity
+    let x1 = -Infinity
+    let y1 = -Infinity
+    const add = (x: number, y: number) => {
+      if (!isFinite(x) || !isFinite(y)) return
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+    for (const d of [...this.graphs, ...this.inner]) add(d.x, d.y)
+    // A history line: its whole axis, from the lane names left of it to its end.
+    for (const g of this.graphs) {
+      const h = g.hist
+      if (!h) continue
+      const { w, gap, off } = this.histBox(h.lanes, g)
+      add(g.x + g.r + off + w, g.y - (h.lanes.length / 2 + 1) * gap)
+      add(g.x - off, g.y + (h.lanes.length / 2 + 1) * gap)
+    }
+    return isFinite(x0) ? { x0, y0, x1, y1 } : null
   }
   // Back to a remembered graph, at its place on the screen and zoom. False when that graph is not shown.
   restoreFocus(want: Focus, onMissing: () => void) {

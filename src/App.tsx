@@ -524,7 +524,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         engine.restoreFocus(focusWant.current, () => (focusWant.current = null))
         return
       }
-      if ((ty || f.graph) && !(keepView && engine.viewSet)) engine.fitView()
+      // Every filter chosen by hand frames what it shows (architect 2026-11-21); a refresh keeps the picture.
+      if (!(keepView && engine.viewSet)) engine.fitView()
     }
     settle()
     if (!f.tags.length && !ty && !f.graph) return
