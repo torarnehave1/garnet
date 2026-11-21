@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { sendChat, type ChatTurn } from '../api/agentChat'
+import { sendChat, type ChatTurn, type PausedState, type PendingCall } from '../api/agentChat'
 import {
   addMessage,
   createSession,
@@ -34,8 +34,9 @@ import { canLive, startLive, type LiveSession } from '../lib/live'
 import { MicBar } from './MicBar'
 import type { User } from '../lib/types'
 
-// A chat on the left. The model is not chosen here. Its tools are the VEGR.AI MCP server's,
-// as the signed-in person (agentChat.ts). The selected graph is passed along as "this graph".
+// A chat on the left. It runs on the VEGR.AI MCP server (knowledge.vegvisr.org/mcp/chat,
+// agentChat.ts), which chooses the model and uses the server's tools as the signed-in person.
+// Before a tool that changes anything, the server pauses and the panel asks Yes / No. The selected graph is passed along as "this graph".
 // Each question and its answer are kept in Agent-Builder's chat history, marked "garnet"
 // (chatHistory.ts); History reopens an earlier chat. Images, PDFs and text files go with a message;
 // an audio file is transcribed into the chat (attachments.ts). Mic takes what is said into the
@@ -56,11 +57,28 @@ interface Msg {
   files?: Attachment[] // what went with a question (not kept in the saved history)
   ctx?: ViewNote // what the map showed when the question was asked (kept in the history)
   graphs?: string[] // graphs this answer created or changed: each gets Show on the map
+  approval?: Approval // the server paused before a change and waits for Yes / No
+}
+// What a paused answer needs to go on: the server's state, the question it belongs to, and what
+// to save once the answer is done.
+interface Approval {
+  calls: PendingCall[]
+  state: PausedState
+  history: ChatTurn[]
+  ctx: ViewNote
+  asked: string
 }
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi
-const isWrite = (name: string) =>
-  !/(^|_)(list|get|search|read|query|preview|describe)/.test(name) && name !== 'list tools'
+
+// A pending change in words: the tool, the graph by its title when the map has it, and the rest
+// of the arguments shortened.
+function callLine(c: PendingCall, title: (id: string) => string | null): { head: string; rest: string } {
+  const gid = typeof c.args.graphId === 'string' ? c.args.graphId : ''
+  const head = c.name + (gid ? ' · ' + (title(gid) || gid) : '')
+  const rest = JSON.stringify(Object.fromEntries(Object.entries(c.args).filter(([k]) => k !== 'graphId')))
+  return { head, rest: rest === '{}' ? '' : rest.length > 400 ? rest.slice(0, 399) + '…' : rest }
+}
 
 // The graphs an answer worked on: graph ids in its write calls' arguments, then graph links in
 // its text (a new graph's id is often only in the "View" link the answer gives). At most three.
@@ -377,19 +395,42 @@ export function ChatPanel({
       { role: 'user', text, files: files.length ? files : undefined, ctx },
       { role: 'assistant', text: '', model, steps: [] },
     ])
+    // The saved question names its files (an image by its address); the file content is not kept.
+    const asked = [text, files.length ? describe(files) : ''].filter(Boolean).join('\n\n')
+    await stream(history, ctx, asked)
+  }
+
+  // The person answered a paused change: the same answer goes on, on the server, with the decision.
+  async function decide(yes: boolean) {
+    const last = msgs[msgs.length - 1]
+    const a = last?.approval
+    if (!a || busy) return
+    patchLast((m) => ({ ...m, approval: undefined, steps: (m.steps || []).map((s) => (a.calls.some((c) => c.callId === s.callId) && !yes ? { ...s, ok: false, summary: 'Declined' } : s)) }))
+    const decisions = Object.fromEntries(a.calls.map((c) => [c.callId, yes]))
+    await stream(a.history, a.ctx, a.asked, { state: a.state, decisions }, yes ? a.calls.map((c) => c.args) : [])
+  }
+
+  // One request to the chat on the MCP server, drawn into the last (assistant) message.
+  async function stream(
+    history: ChatTurn[],
+    ctx: ViewNote,
+    asked: string,
+    resume?: { state: PausedState; decisions: Record<string, boolean> },
+    approvedArgs: Record<string, unknown>[] = [],
+  ) {
     setBusy(true)
     const ctl = new AbortController()
     abort.current = ctl
-    let wrote = false
+    let wrote = approvedArgs.length > 0
     // Mirrors of what the handlers build in state, for saving once the answer is done.
     let answer = ''
     let lastNote = ''
     let ran = model
-    const writeArgs: Record<string, unknown>[] = []
+    let paused = false
+    const writeArgs: Record<string, unknown>[] = [...approvedArgs]
     try {
       await sendChat(
         user,
-        model,
         history,
         graph?.id || null,
         ctx.text,
@@ -409,10 +450,6 @@ export function ChatPanel({
           } else if (e.type === 'tool_call') {
             if (answer.trim()) lastNote = answer.trim()
             answer = ''
-            if (isWrite(e.name)) {
-              wrote = true
-              writeArgs.push(e.args)
-            }
             patchLast((m) => ({
               ...m,
               text: '',
@@ -429,17 +466,21 @@ export function ChatPanel({
                       },
                     ]
                   : []),
-                { callId: e.callId, name: e.name, ok: null, summary: '' },
+                { callId: e.callId, name: e.name, ok: null, summary: e.write ? 'Waits for your yes' : '' },
               ],
             }))
-          } else if (e.type === 'tool_result')
+          } else if (e.type === 'tool_result') {
             patchLast((m) => ({
               ...m,
               steps: (m.steps || []).map((s) => (s.callId === e.callId ? { ...s, ok: e.ok, summary: e.summary } : s)),
             }))
-          else if (e.type === 'error') patchLast((m) => ({ ...m, error: e.error }))
+          } else if (e.type === 'approval') {
+            paused = true
+            patchLast((m) => ({ ...m, approval: { calls: e.calls, state: e.state, history, ctx, asked } }))
+          } else if (e.type === 'error') patchLast((m) => ({ ...m, error: e.error }))
         },
         ctl.signal,
+        resume,
       )
     } catch (err) {
       if (!ctl.signal.aborted)
@@ -451,24 +492,24 @@ export function ChatPanel({
     } finally {
       setBusy(false)
       abort.current = null
-      // No text after the last tool call: the last note was the answer after all.
-      if (!answer.trim() && lastNote) {
-        answer = lastNote
-        patchLast((m) => {
-          if (m.text) return m
-          const steps = m.steps || []
-          const at = steps.map((x) => x.note).lastIndexOf(true)
-          return { ...m, text: lastNote, steps: steps.filter((_, j) => j !== at) }
-        })
+      if (!paused) {
+        // No text after the last tool call: the last note was the answer after all.
+        if (!answer.trim() && lastNote) {
+          answer = lastNote
+          patchLast((m) => {
+            if (m.text) return m
+            const steps = m.steps || []
+            const at = steps.map((x) => x.note).lastIndexOf(true)
+            return { ...m, text: lastNote, steps: steps.filter((_, j) => j !== at) }
+          })
+        }
+        const graphs = wrote ? touchedGraphs(writeArgs, answer) : []
+        if (graphs.length) patchLast((m) => ({ ...m, graphs }))
+        if (answer.trim() && !ctl.signal.aborted)
+          saving.current = keep(asked, answer.trim(), ran, ctx, graphs.length ? graphs : undefined)
+        // A tool that may have changed something: the map reads the graphs again.
+        if (wrote) onWrote()
       }
-      // The saved question names its files (an image by its address); the file content is not kept.
-      const asked = [text, files.length ? describe(files) : ''].filter(Boolean).join('\n\n')
-      const graphs = wrote ? touchedGraphs(writeArgs, answer) : []
-      if (graphs.length) patchLast((m) => ({ ...m, graphs }))
-      if (answer.trim() && !ctl.signal.aborted)
-        saving.current = keep(asked, answer.trim(), ran, ctx, graphs.length ? graphs : undefined)
-      // A tool that may have changed something: the map reads the graphs again.
-      if (wrote) onWrote()
     }
   }
 
@@ -558,6 +599,30 @@ export function ChatPanel({
             )}
             {m.role === 'assistant' && !m.text && !m.error && busy && i === msgs.length - 1 && (
               <div className="muted">Working…</div>
+            )}
+            {m.approval && (
+              <div className="capprove" role="group" aria-label="Allow this change?">
+                <div className="capprove-q">{m.approval.calls.length > 1 ? 'Allow these changes?' : 'Allow this change?'}</div>
+                <ul>
+                  {m.approval.calls.map((c) => {
+                    const l = callLine(c, graphTitle)
+                    return (
+                      <li key={c.callId}>
+                        <strong>{l.head}</strong>
+                        {l.rest && <code>{l.rest}</code>}
+                      </li>
+                    )
+                  })}
+                </ul>
+                <div className="capprove-act">
+                  <button type="button" disabled={busy || i !== msgs.length - 1} onClick={() => void decide(true)}>
+                    Yes
+                  </button>
+                  <button type="button" className="ghost" disabled={busy || i !== msgs.length - 1} onClick={() => void decide(false)}>
+                    No
+                  </button>
+                </div>
+              </div>
             )}
             {m.error && <div className="cerr">{m.error}</div>}
             {m.graphs && m.graphs.length > 0 && <GraphButtons ids={m.graphs} title={graphTitle} show={onShowGraph} />}
