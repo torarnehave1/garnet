@@ -29,7 +29,7 @@ function NodeText({ graphId, nodeId, user }: { graphId: string; nodeId: string; 
   return <div className="cardBody" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSecond, onClose, onDiagram }: { item: Item | null; user: User; N: number; trace?: string; skeleton: boolean; scopeAll: boolean; pair: Pair | null; onPickSecond: () => void; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
+export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSecond, onClose, onDiagram }: { item: Item | null; user: User; N: number; trace?: { text: string; color: string }; skeleton: boolean; scopeAll: boolean; pair: Pair | null; onPickSecond: () => void; onClose: () => void; onDiagram: (n: NodeItem) => void }) {
   // After "Select a second member": the next click on the map picks it.
   const [picking, setPicking] = useState<string | null>(null)
   // A Virtual World has no editor of its own: its defining graph opens in the platform editor.
@@ -85,7 +85,7 @@ export function Card({ item, user, N, trace, skeleton, scopeAll, pair, onPickSec
       </button>
       <h2>{title}</h2>
       <p>{meta}</p>
-      {trace && <p className="cardTrace">{trace}</p>}
+      {trace && <p style={{ color: trace.color }}>{trace.text}</p>}
       {body}
       {item.kind === 'g' && item.virtual && !(pair && pair.a === item) && (
         <p>

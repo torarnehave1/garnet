@@ -343,4 +343,3 @@ button.pick { min-width: 0; background: var(--bg); color: var(--ink); border: 1p
 .recbox .recstatus { color: var(--muted); font-size: 13px; }
 .recbox a { color: var(--accent); }
 
-.cardTrace { color: #ffd166; }

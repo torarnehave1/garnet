@@ -4,6 +4,7 @@ import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
 import { courseOrder, flowOrder, iconKey, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
 import { TRACE_COLOR, traceStrength } from '../lib/searchTrace'
+import { INTEREST_COLOR, interestKey } from '../lib/interest'
 import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, utcMs, versionText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
@@ -138,7 +139,7 @@ export interface EngineEvents {
   onSelect(d: Item | null, byUser?: boolean): void
   // Two members of a Virtual World are selected together: what ties them. null: no pair.
   onPair?(p: Pair | null): void
-  onContext(g: GraphItem, clientX: number, clientY: number): void
+  onContext(g: GraphItem, clientX: number, clientY: number, node: NodeItem | null): void
   onZoom(z: number): void
   onFocus(f: Focus): void
   onUserMove(): void
@@ -224,6 +225,11 @@ export class Engine {
   private trace: Map<string, { t: number }> = new Map()
   setTrace(trace: Map<string, { t: number }>) {
     this.trace = trace
+  }
+  // Interest marks: the nodes marked as interesting, by "graphId/nodeId" (lib/interest.ts).
+  private interest: Map<string, number> = new Map()
+  setInterest(marks: Map<string, number>) {
+    this.interest = marks
   }
   // Each changed graph's current version number, for the Version mode. Filled in like the counts.
   private pulseVersions: Map<string, number> = new Map()
@@ -849,9 +855,10 @@ export class Engine {
     return d ? (d.kind === 'g' ? d : d.kind === 'n' ? d.parent : null) : null
   }
   private openMenu(clientX: number, clientY: number) {
-    const g = this.graphOf(this.pick(clientX, clientY))
+    const d = this.pick(clientX, clientY)
+    const g = this.graphOf(d)
     if (!g) return false
-    this.ev.onContext(g, clientX, clientY)
+    this.ev.onContext(g, clientX, clientY, d && d.kind === 'n' ? d : null)
     return true
   }
   private wire() {
@@ -1136,6 +1143,7 @@ export class Engine {
     if (this.trace.size && !this.skeleton) this.drawTrace(kk)
     if (pulseOn) this.drawPulse(kk, now)
     if (this.pulseMode !== 'off' && !this.skeleton && this.detailOn && (this.nodePulse.size || this.nodeWindow)) this.drawNodePulse(kk, now)
+    if (this.interest.size && !this.skeleton && this.detailOn) this.drawInterest(kk, now)
     this.drawShares(kk)
     this.hubs.forEach((d, i) => {
       if (!d.vis) return
@@ -1397,6 +1405,31 @@ export class Engine {
       ctx.globalAlpha = a
       ctx.strokeStyle = color
       ctx.stroke()
+    }
+  }
+  // Interest marks: a teal ring on each marked node with three rings travelling out from it, shown
+  // whether the pulse layer is on or not. With reduced motion the rings stand still.
+  private drawInterest(kk: number, now: number) {
+    const { ctx, T } = this
+    const px = 1 / T.k
+    ctx.strokeStyle = INTEREST_COLOR
+    for (const d of this.inner) {
+      if (d.order >= kk || !this.interest.has(interestKey(d.parent.id, d.nid))) continue
+      const near = this.isNear(d) ? 1 : 0.2
+      const phase = (hash('i' + d.parent.id + d.nid) % 1000) / 1000
+      const r0 = d.r * (d.flow ? 1.45 : 1) + 3 * px
+      ctx.lineWidth = 2 * px
+      ctx.globalAlpha = near
+      ctx.beginPath()
+      ctx.arc(d.x, d.y, r0, 0, 6.2832)
+      ctx.stroke()
+      ctx.lineWidth = 1.4 * px
+      for (const p of ripples(now, 3, phase, this.reduced)) {
+        ctx.globalAlpha = near * (this.reduced ? 0.7 - 0.5 * p : (1 - p) * Math.min(1, p * 8))
+        ctx.beginPath()
+        ctx.arc(d.x, d.y, r0 + (this.reduced ? p + 1 / 3 : p) * 18 * px, 0, 6.2832)
+        ctx.stroke()
+      }
     }
   }
   // A pulse on each node that was changed in the chosen days. Ripple: two rings travel out from

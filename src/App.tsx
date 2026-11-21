@@ -23,14 +23,15 @@ import { isFlowGraph } from './lib/flow'
 import { iconKey } from './lib/graphRules'
 import { kOf, mapState, viewContext, viewLine, type MapState } from './lib/chatContext'
 import { PULSE_MODES, type PulseMode } from './lib/pulse'
-import { addTraces, clearTraces, readTraces, traceAge, TRACE_DAYS, type Traces } from './lib/searchTrace'
+import { addTraces, clearTraces, readTraces, traceAge, TRACE_COLOR, TRACE_DAYS, type Traces } from './lib/searchTrace'
+import { INTEREST_COLOR, interestKey, readInterests, toggleInterest, type Interests } from './lib/interest'
 import { usePulse } from './lib/usePulse'
 import { useNodePulse } from './lib/useNodePulse'
 // React Flow is loaded only when a flow is opened.
 const FlowPanel = lazy(() => import('./components/FlowPanel'))
 const DiagramModal = lazy(() => import('./components/DiagramModal'))
 const NodePreview = lazy(() => import('./components/NodePreview'))
-import { Engine, type Focus, type GraphItem, type Item, type Pair, type Snapshot } from './engine/Engine'
+import { Engine, type Focus, type GraphItem, type Item, type NodeItem, type Pair, type Snapshot } from './engine/Engine'
 import {
   DEFAULT_FILTERS,
   monthOf,
@@ -263,7 +264,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [speed, setSpeed] = useState('8')
   const [from, setFrom] = useState('0')
   const [tagOpen, setTagOpen] = useState(false)
-  const [menu, setMenu] = useState<{ g: GraphItem; x: number; y: number } | null>(null)
+  const [menu, setMenu] = useState<{ g: GraphItem; node: NodeItem | null; x: number; y: number } | null>(null)
   const [dialog, setDialog] = useState<DialogSpec | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -374,6 +375,12 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   useEffect(() => {
     engine?.setTrace(traces)
   }, [engine, traces])
+  // Interest marks: nodes marked as interesting through the context menu ripple in teal.
+  const [interests, setInterests] = useState<Interests>(() => readInterests(user.email))
+  useEffect(() => setInterests(readInterests(user.email)), [user.email])
+  useEffect(() => {
+    engine?.setInterest(interests)
+  }, [engine, interests])
 
   // The graphs the map draws now, for the pulse layer (the drawing effect below works out its own).
   const pulseOn = pulseMode !== 'off'
@@ -407,8 +414,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         setPreview(view && !asDiagram && d?.kind === 'n' ? { graphId: d.parent.id, nodeId: d.nid, world: d.parent.world, title: d.label, type: d.type, full: view === 'full' } : null)
       },
       // A Virtual World member is not a graph on the server: nothing to rename, delete, move or share.
-      onContext: (g, x, y) => {
-        if (!g.virtual) setMenu({ g, x, y })
+      onContext: (g, x, y, node) => {
+        if (!g.virtual) setMenu({ g, node, x, y })
       },
       onZoom: setZoomZ,
       onFocus: (focus) => storeView({ f: effRef.current, focus }),
@@ -923,6 +930,13 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       {menu && (
         <ContextMenu
           graph={menu.g}
+          node={menu.node}
+          marked={!!menu.node && interests.has(interestKey(menu.g.id, menu.node.nid))}
+          onInterest={() => {
+            const n = menu.node
+            if (n) setInterests((had) => toggleInterest(user.email, had, menu.g.id, n.nid, Date.now()))
+            setMenu(null)
+          }}
           x={menu.x}
           y={menu.y}
           onRename={() => askRename(menu.g)}
@@ -1009,8 +1023,12 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             user={user}
             N={snap.N}
             trace={(() => {
+              if (selected?.kind === 'n') {
+                const at = interests.get(interestKey(selected.parent.id, selected.nid))
+                return at ? { text: `Marked as interesting ${traceAge(at, Date.now())}.`, color: INTEREST_COLOR } : undefined
+              }
               const tr = selected?.kind === 'g' ? traces.get(selected.id) : undefined
-              return tr ? `Search trace: found by “${tr.q}” ${traceAge(tr.t, Date.now())}.` : undefined
+              return tr ? { text: `Search trace: found by “${tr.q}” ${traceAge(tr.t, Date.now())}.`, color: TRACE_COLOR } : undefined
             })()}
             skeleton={snap.skeleton}
             scopeAll={scope === 'all'}

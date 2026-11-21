@@ -1,8 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import type { GraphItem } from '../engine/Engine'
+import type { GraphItem, NodeItem } from '../engine/Engine'
 
 export function ContextMenu({
   graph,
+  node,
+  marked,
+  onInterest,
   x,
   y,
   onRename,
@@ -12,6 +15,9 @@ export function ContextMenu({
   onShare,
 }: {
   graph: GraphItem
+  node: NodeItem | null // the node right-clicked, null when it was the graph itself
+  marked: boolean // the node is marked as interesting
+  onInterest: () => void
   x: number
   y: number
   onRename: () => void
@@ -30,7 +36,15 @@ export function ContextMenu({
     el?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
   }, [x, y])
   return (
-    <div className="ctx" ref={ref} role="menu" aria-label="Actions for this graph" style={pos}>
+    <div className="ctx" ref={ref} role="menu" aria-label={node ? 'Actions for this node and its graph' : 'Actions for this graph'} style={pos}>
+      {node && (
+        <>
+          <div className="ctxhead">{node.label || 'Node'}</div>
+          <button type="button" className="ctxitem" role="menuitem" onClick={onInterest}>
+            {marked ? 'Remove interest mark' : 'Mark node as interesting'}
+          </button>
+        </>
+      )}
       <div className="ctxhead">{graph.title}</div>
       <button type="button" className="ctxitem" role="menuitem" onClick={onRename}>
         Rename graph…
