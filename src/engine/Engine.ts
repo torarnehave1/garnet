@@ -904,8 +904,10 @@ export class Engine {
   private histRect(g: GraphItem) {
     const b = this.histBoxOf(g)
     if (!b) return null
-    const pad = 6 / this.T.k
-    return { x0: g.x - g.r - pad, x1: b.x0 + b.w * 1.3 + pad, y0: Math.min(g.y - g.r, b.top - b.gap * 2.6) - pad, y1: Math.max(g.y + g.r, b.bottom + b.gap) + pad }
+    const pad = 10 / this.T.k
+    const loose = this.inner.filter((o) => o.parent === g && !o.hist && !o.flow).length
+    const cols = Math.ceil(loose / Math.max(1, g.hist!.lanes.length))
+    return { x0: g.x - g.r - 14 / this.T.k - cols * b.gap - pad, x1: b.x0 + b.w * 1.3 + pad, y0: Math.min(g.y - g.r, b.top - b.gap * 2.6) - pad, y1: Math.max(g.y + g.r, b.bottom + b.gap) + pad }
   }
   // A force: history lines do not overlap each other, and no other graph, hub or node stands
   // inside one. Overlapping lines move apart along the shorter overlap (usually up and down);
@@ -925,11 +927,11 @@ export class Engine {
         const ga = hs[i]
         const gb = hs[j]
         if (oy <= ox) {
-          const s = (a.y0 + a.y1 < b.y0 + b.y1 ? -1 : 1) * oy * 0.25
+          const s = (a.y0 + a.y1 < b.y0 + b.y1 ? -1 : 1) * oy * 0.5
           ga.vy = (ga.vy || 0) + s
           gb.vy = (gb.vy || 0) - s
         } else {
-          const s = (a.x0 + a.x1 < b.x0 + b.x1 ? -1 : 1) * ox * 0.25
+          const s = (a.x0 + a.x1 < b.x0 + b.x1 ? -1 : 1) * ox * 0.5
           ga.vx = (ga.vx || 0) + s
           gb.vx = (gb.vx || 0) - s
         }
@@ -1719,11 +1721,16 @@ export class Engine {
     for (const d of this.inner) {
       const h = d.parent.hist
       if (h && !d.hist && !d.flow) {
-        // A node without a year (an About node): to the left of the circle, out of the lanes.
+        // A node without a year (an About node): to the left of the circle, out of the lanes, in
+        // columns as tall as the lanes, so it stays inside the line's room.
         const i = loose.get(d.parent.id) ?? 0
         loose.set(d.parent.id, i + 1)
-        d.x = d.fx = d.parent.x - d.parent.r - 14 / this.T.k
-        d.y = d.fy = d.parent.y + i * 10 / this.T.k
+        let b = boxes.get(d.parent.id)
+        if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes, d.parent)))
+        const rows = Math.max(1, h.lanes.length)
+        const top = d.parent.y - ((rows - 1) / 2) * b.gap
+        d.x = d.fx = d.parent.x - d.parent.r - 14 / this.T.k - Math.floor(i / rows) * b.gap
+        d.y = d.fy = top + (i % rows) * b.gap
         continue
       }
       if (!d.hist || !h) continue
