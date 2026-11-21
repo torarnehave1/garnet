@@ -255,6 +255,11 @@ export class Engine {
   // The history event under the mouse: its whole name is shown on top, also when the lane had no
   // room for it.
   private hoverHist: NodeItem | null = null
+  // Width of the info panels on the left of a wide screen; 0 when they are folded away.
+  private leftPanels = 364
+  setLeftPanels(w: number) {
+    this.leftPanels = w
+  }
   private cleanup: (() => void)[] = []
   // Course images by address: null while loading or when the address gave no picture.
   private pics = new Map<string, HTMLCanvasElement | null>()
@@ -1559,7 +1564,7 @@ export class Engine {
       // When the axis is panned past the left edge, the lane names stay at that edge, on a dark
       // ground, so each row can still be told.
       // Right of the info panels on the left (about 360 px wide) on a wide screen.
-      const edge = (-T.x + (this.W > 900 ? 372 : 8)) / T.k
+      const edge = (-T.x + (this.W > 900 ? this.leftPanels + 8 : 8)) / T.k
       h.lanes.forEach((lane, i) => {
         const txt = lane.length > 34 ? lane.slice(0, 33) + '…' : lane
         const tw = ctx.measureText(txt).width

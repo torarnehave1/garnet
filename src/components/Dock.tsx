@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { Snapshot } from '../engine/Engine'
 import { dayOf, type Option } from '../lib/rows'
 import type { Filters, Scope } from '../lib/types'
@@ -48,36 +47,19 @@ export interface DockProps {
   onSlide: (k: number) => void
   onRefresh: () => void
   refreshing: boolean
-}
-
-// Whether the dock (play, filters) is folded away, remembered in this browser.
-const HIDE_KEY = 'garnet.dockHidden'
-function readHidden() {
-  try {
-    return localStorage.getItem(HIDE_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-function saveHidden(v: boolean) {
-  try {
-    localStorage.setItem(HIDE_KEY, v ? '1' : '0')
-  } catch {
-    /* storage may be unavailable; the choice then lasts this visit only */
-  }
+  // Folded away: the dock, and the info panels on the left with it.
+  hidden: boolean
+  onHidden: (v: boolean) => void
 }
 
 export function Dock(p: DockProps) {
-  const [hidden, setHidden] = useState(readHidden)
-  const toggle = (v: boolean) => {
-    setHidden(v)
-    saveHidden(v)
-  }
+  const hidden = p.hidden
+  const toggle = p.onHidden
   const { snap, filters: f } = p
   if (hidden)
     return (
       <div className="dock dockMin">
-        <button type="button" className="ghost" aria-expanded={false} title="Show the play and filter controls" onClick={() => toggle(false)}>
+        <button type="button" className="ghost" aria-expanded={false} title="Show the play and filter controls and the info panels" onClick={() => toggle(false)}>
           Show controls
         </button>
       </div>
@@ -184,7 +166,7 @@ export function Dock(p: DockProps) {
         <button className="ghost" type="button" disabled={p.refreshing} onClick={p.onRefresh}>
           {p.refreshing ? 'Refreshing…' : 'Refresh from VEGR.AI'}
         </button>{' '}
-        <button className="ghost" type="button" aria-expanded={true} title="Fold the play and filter controls away, to see more of the map" onClick={() => toggle(true)}>
+        <button className="ghost" type="button" aria-expanded={true} title="Fold the play and filter controls and the info panels away, to see more of the map" onClick={() => toggle(true)}>
           Hide controls
         </button>
       </div>

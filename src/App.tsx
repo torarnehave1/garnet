@@ -10,6 +10,7 @@ import { ChatPanel } from './components/ChatPanel'
 import { ContextMenu } from './components/ContextMenu'
 import { Dialog, type DialogSpec } from './components/Dialog'
 import { Dock } from './components/Dock'
+import { readHidden, saveHidden } from './lib/dockHidden'
 import { Login } from './components/Login'
 import { applyRules, nodeView, readRules, RULES_GRAPH_ID } from './lib/viewRules'
 import { PulseBar } from './components/PulseBar'
@@ -224,6 +225,8 @@ export default function App() {
 function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const cvRef = useRef<HTMLCanvasElement>(null)
   const [engine, setEngine] = useState<Engine | null>(null)
+  // Controls folded away: the dock and the info panels on the left.
+  const [panelsHidden, setPanelsHidden] = useState(readHidden)
   const [scope, setScope] = useState<Scope>(() => {
     try {
       return localStorage.getItem(SCOPE_KEY) === 'all' ? 'all' : 'mine'
@@ -853,6 +856,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
       `${snap.kk} of ${snap.N} graphs · ${snap.nodesShown.toLocaleString()} of ${snap.nodesTotal.toLocaleString()} nodes · ${snap.hubsShown} meta areas` +
       (nodeNote ? ' · ' + nodeNote : freshness ? ' · ' + freshness : '')
 
+  // The history line's lane names stay right of the info panels, or at the edge when folded away.
+  useEffect(() => {
+    engine?.setLeftPanels(panelsHidden ? 0 : 364)
+  }, [engine, panelsHidden])
+
   return (
     <>
       <canvas ref={cvRef} className="net" aria-label="Network of knowledge graphs and meta areas" />
@@ -866,8 +874,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         {canSearch && (
           <SearchBar active={searchQ} busy={searchBusy} found={found} error={searchErr} onSearch={setSearchQ} onClear={() => setSearchQ('')} />
         )}
-        {sw.rate && <RateChart engine={engine} snap={snap} />}
-        <PulseBar mode={pulseMode} sum={pulse} nodes={nodePulse} onShow={showGraph} />
+        {!panelsHidden && sw.rate && <RateChart engine={engine} snap={snap} />}
+        {!panelsHidden && <PulseBar mode={pulseMode} sum={pulse} nodes={nodePulse} onShow={showGraph} />}
         {note && (
           <div className="note">
             <span>{note}</span>{' '}
@@ -1032,6 +1040,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           </div>
         </div>
         <Dock
+          hidden={panelsHidden}
+          onHidden={(v) => {
+            setPanelsHidden(v)
+            saveHidden(v)
+          }}
           snap={snap}
           filters={eff}
           onFilter={changeFilters}
