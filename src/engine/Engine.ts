@@ -10,7 +10,7 @@ import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
 import type { KgGraph, Row } from '../lib/types'
 import { SEED } from './seed'
-import { EDGE, histFrac, histTicks, histYearAt, histZoomAt, type HistView } from '../lib/historyAxis'
+import { EDGE, histFrac, histTicks, type HistView } from '../lib/historyAxis'
 
 /* ---------- what is drawn ---------- */
 interface Base extends SimulationNodeDatum {
@@ -268,11 +268,6 @@ export class Engine {
   // The history event under the mouse: its whole name is shown on top, also when the lane had no
   // room for it.
   private hoverHist: NodeItem | null = null
-  // A period being chosen by dragging along a history line's date row (0..1 along the axis).
-  private brush: { g: GraphItem; f0: number; f1: number } | null = null
-  // How events that would cover each other in a lane are drawn: 'stack' puts them in up to three
-  // thin rows inside the lane; 'small' makes the dots smaller and moves them just apart.
-  histPack: 'stack' | 'small' = 'stack'
   // Where each history line's "whole period" button stands, in map units, while a period is shown.
   private histReset = new Map<string, { x: number; y: number; w: number; h: number }>()
   // Width of the info panels on the left of a wide screen; 0 when they are folded away.
@@ -291,16 +286,6 @@ export class Engine {
     this.sel = select(cv)
     this.zoomer = d3zoom<HTMLCanvasElement, unknown>()
       .scaleExtent([0.15, 48])
-      // As d3's own filter, except a press on a history line's date row, which chooses a period.
-      .filter((e: MouseEvent & TouchEvent) => {
-        if ((e.ctrlKey && e.type !== 'wheel') || e.button) return false
-        if (e.type === 'mousedown' || e.type === 'touchstart') {
-          const p = e.type === 'touchstart' ? e.touches[0] : e
-          const at = p && this.histAt(p.clientX, p.clientY)
-          if (at && at.dates) return false
-        }
-        return true
-      })
       .on('zoom', (e) => {
         if (e.sourceEvent) {
           this.fitToken++
@@ -897,16 +882,17 @@ export class Engine {
     const top = g.y - ((h.lanes.length - 1) / 2) * gap
     return { x0: g.x + g.r + off, w, gap, top, bottom: top + (h.lanes.length - 1) * gap }
   }
-  // The history line under a point: which, where along its axis (0..1), and whether the point is
-  // on the row of dates above the lanes (shown from zoom 3).
-  private histAt(clientX: number, clientY: number): { g: GraphItem; f: number; dates: boolean } | null {
+  // The history line under a point, and the lane: on its line or on its name to the left.
+  private histAt(clientX: number, clientY: number): { g: GraphItem; lane: number } | null {
     const p = this.toMap(clientX, clientY)
     const kk = Math.floor(this.k)
     for (const g of this.graphs) {
       if (!g.hist || g.order >= kk) continue
       const b = this.histBoxOf(g)!
-      if (p.x < b.x0 || p.x > b.x0 + b.w || p.y < b.top - b.gap * 1.6 || p.y > b.bottom + b.gap * 0.6) continue
-      return { g, f: (p.x - b.x0) / b.w, dates: this.T.k >= 3 && p.y < b.top - b.gap * 0.4 }
+      if (p.x < g.x + g.r || p.x > b.x0 + b.w) continue
+      const lane = Math.round((p.y - b.top) / b.gap)
+      if (lane < 0 || lane >= g.hist.lanes.length || Math.abs(p.y - (b.top + lane * b.gap)) > b.gap / 2) continue
+      return { g, lane }
     }
     return null
   }
@@ -964,6 +950,22 @@ export class Engine {
           return
         }
       }
+      // A click on a history lane (its line or its name, not an event): the axis shows that lane's
+      // whole period, from its first event to its last.
+      if (!this.pick(e.clientX, e.clientY)) {
+        const at = this.histAt(e.clientX, e.clientY)
+        const years = at ? this.inner.filter((o) => o.parent === at.g && o.hist && o.hist.lane === at.lane).map((o) => o.hist!.year) : []
+        if (at && years.length) {
+          const h = at.g.hist!
+          let a = Math.min(...years)
+          let z = Math.max(...years)
+          const pad = Math.max((z - a) * 0.05, 1 / 365)
+          a = Math.max(h.y0, a - pad)
+          z = Math.min(h.y1, z + pad)
+          this.setHistView(at.g, a <= h.y0 && z >= h.y1 ? undefined : { a, b: Math.max(z, a + 1 / 8760) })
+          return
+        }
+      }
       const d = this.pick(e.clientX, e.clientY)
       const first = this.selected
       // A second member of the same Virtual World: Shift-click, or the click after pickSecond().
@@ -974,44 +976,6 @@ export class Engine {
       }
       this.select(d, true)
       this.nudge(d)
-    })
-    // A double-click on a history line opens the period around it: the group of events there.
-    on('dblclick', (e) => {
-      const at = this.histAt(e.clientX, e.clientY)
-      if (!at) return
-      e.preventDefault()
-      const h = at.g.hist!
-      const years = this.inner.filter((o) => o.parent === at.g && o.hist).map((o) => o.hist!.year)
-      this.setHistView(at.g, histZoomAt(h.y0, h.y1, h.view, years, histYearAt(h.y0, h.y1, h.view, at.f)))
-    })
-    // Dragging along a history line's date row chooses a period (the map is not moved: the zoom's
-    // filter leaves such a press to this).
-    on('pointerdown', (e) => {
-      const at = this.histAt(e.clientX, e.clientY)
-      if (!at || !at.dates || e.button) return
-      this.brush = { g: at.g, f0: at.f, f1: at.f }
-      cv.setPointerCapture?.(e.pointerId)
-    })
-    on('pointermove', (e) => {
-      const b = this.brush
-      if (!b) return
-      const box = this.histBoxOf(b.g)
-      if (box) b.f1 = Math.min(1, Math.max(0, (this.toMap(e.clientX, e.clientY).x - box.x0) / box.w))
-    })
-    const endBrush = () => {
-      const b = this.brush
-      if (!b) return
-      this.brush = null
-      const h = b.g.hist
-      if (!h || Math.abs(b.f1 - b.f0) < 0.01) return
-      this.swallowClick = true
-      const a = histYearAt(h.y0, h.y1, h.view, Math.min(b.f0, b.f1))
-      const z = histYearAt(h.y0, h.y1, h.view, Math.max(b.f0, b.f1))
-      this.setHistView(b.g, { a, b: Math.max(z, a + 1 / 8760) })
-    }
-    on('pointerup', endBrush)
-    on('pointercancel', () => {
-      this.brush = null
     })
     on('contextmenu', (e) => {
       e.preventDefault()
@@ -1711,11 +1675,11 @@ export class Engine {
       d.y = d.fy = d.parent.y + (d.hist.lane - (h.lanes.length - 1) / 2) * gap
       d.r = 2
     }
-    this.unpackHistory(boxes)
+    this.unpackHistory()
   }
-  // Events in the same lane that would cover each other (and so each other's names) are drawn
-  // apart, one lane at a time, by histPack.
-  private unpackHistory(boxes: Map<string, { gap: number }>) {
+  // Events in the same lane that would cover each other (and so each other's names) get half the
+  // size, and each is moved right just enough to clear the one before it.
+  private unpackHistory() {
     const lanes = new Map<string, NodeItem[]>()
     for (const d of this.inner) {
       if (!d.hist || !d.parent.hist) continue
@@ -1728,46 +1692,16 @@ export class Engine {
     for (const list of lanes.values()) {
       if (list.length < 2) continue
       list.sort((a, b) => a.x - b.x)
-      const gap = boxes.get(list[0].parent.id)?.gap ?? 9
-      const clash = (r: number) => list.some((d, i) => i > 0 && d.x - list[i - 1].x < 2 * r + px)
-      if (!clash(2)) continue
-      const y0 = list[0].y
-      if (this.histPack === 'small') {
-        // Half the size, and each dot moved right just enough to clear the one before it.
-        const r = 1
-        let last = -Infinity
-        for (const d of list) {
-          d.r = r
-          d.x = d.fx = Math.max(d.x, last + 2 * r + px)
-          last = d.x
-        }
-        continue
-      }
-      // Two rows, or three when two are not enough; the dots shrink to fit the lane's height.
-      for (const m of [2, 3]) {
-        const r = Math.min(2, (gap * 0.9) / (2 * m))
-        const ends = new Array(m).fill(-Infinity)
-        let fits = true
-        const slot = list.map((d) => {
-          let s = ends.findIndex((e) => d.x - e >= 2 * r + px)
-          if (s < 0) {
-            fits = false
-            s = ends.indexOf(Math.min(...ends))
-          }
-          ends[s] = d.x
-          return s
-        })
-        if (!fits && m < 3) continue
-        const used = Math.max(...slot) + 1
-        const step = (gap * 0.9) / used
-        list.forEach((d, i) => {
-          d.r = r
-          d.y = d.fy = y0 + (slot[i] - (used - 1) / 2) * step
-        })
-        break
+      if (!list.some((d, i) => i > 0 && d.x - list[i - 1].x < 4 + px)) continue
+      let last = -Infinity
+      for (const d of list) {
+        d.r = 1
+        d.x = d.fx = Math.max(d.x, last + 2 + px)
+        last = d.x
       }
     }
   }
+
   // Faint lane lines, lane names on the left and decade marks above, once zoomed in.
   private drawHistoryAxes(kk: number) {
     const { ctx, T } = this
@@ -1821,14 +1755,6 @@ export class Engine {
         ctx.fillText(label, lx, ly)
         const tw = ctx.measureText(label).width
         this.histReset.set(g.id, { x: lx - 2 / T.k, y: ly - this.fs(8), w: tw + 4 / T.k, h: this.fs(8) * 1.4 })
-      }
-      const b = this.brush
-      if (b && b.g === g) {
-        ctx.globalAlpha = 0.18
-        ctx.fillStyle = '#e3a008'
-        const bottom = top + (h.lanes.length - 1) * gap
-        const fa = Math.min(b.f0, b.f1)
-        ctx.fillRect(x0 + fa * w, top - gap * 1.6, Math.abs(b.f1 - b.f0) * w, bottom - top + gap * 2.1)
       }
       ctx.textAlign = 'center'
     }

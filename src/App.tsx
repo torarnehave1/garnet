@@ -82,8 +82,6 @@ const SCOPE_KEY = 'garnet-scope'
 // The pulse layer's last choice (off, colour, version, beat or ripple), remembered in this browser.
 const PULSE_KEY = 'garnet-pulse'
 const NO_ROWS: Row[] = []
-// How close events on a history line are drawn: stacked in rows, or smaller and moved apart.
-const PACK_KEY = 'garnet-hist-pack'
 function readPulseMode(): PulseMode {
   try {
     const v = localStorage.getItem(PULSE_KEY)
@@ -267,16 +265,6 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [zoomZ, setZoomZ] = useState(1)
   const [sw, setSw] = useState({ rate: true, meta: true, sem: true })
   const [pulseMode, setPulseMode] = useState<PulseMode>(readPulseMode)
-  const [histPack, setHistPack] = useState<'stack' | 'small'>(() => {
-    try {
-      return localStorage.getItem(PACK_KEY) === 'small' ? 'small' : 'stack'
-    } catch {
-      return 'stack'
-    }
-  })
-  useEffect(() => {
-    if (engine) engine.histPack = histPack
-  }, [engine, histPack])
   const [speed, setSpeed] = useState('8')
   const [from, setFrom] = useState('0')
   const [tagOpen, setTagOpen] = useState(false)
@@ -1094,24 +1082,6 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             </label>
             <label className="switch">
               <input type="checkbox" checked={sw.sem} onChange={(e) => setSw({ ...sw, sem: e.target.checked })} /> Semantic links
-            </label>
-            <label className="switch" title="History lines: how events that would cover each other in a lane are drawn">
-              Close events
-              <select
-                value={histPack}
-                onChange={(e) => {
-                  const m = e.target.value === 'small' ? 'small' : 'stack'
-                  try {
-                    localStorage.setItem(PACK_KEY, m)
-                  } catch {
-                    /* storage blocked */
-                  }
-                  setHistPack(m)
-                }}
-              >
-                <option value="stack">Stacked</option>
-                <option value="small">Small, apart</option>
-              </select>
             </label>
             <label className="switch" title="Rings on the graphs changed in the last 7 days, by how many saved changes each got">
               Pulse
