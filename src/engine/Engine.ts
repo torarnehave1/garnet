@@ -901,16 +901,24 @@ export class Engine {
   }
   // The room a history line takes on the map: its circle, the lane names, the axis with the names
   // of its last events, and the dates above. Everything else is kept out of it.
+  // The room is always the size the line has when zoomed in to read it (zoom 3 and closer, where
+  // its height no longer changes), so lines kept apart stay apart when the map is zoomed out.
   private histRect(g: GraphItem) {
-    const b = this.histBoxOf(g)
-    if (!b) return null
+    const h = g.hist
+    if (!h) return null
+    let b = this.histBoxOf(g)!
+    if (this.T.k < 3) {
+      const gap = 9
+      const top = g.y - ((h.lanes.length - 1) / 2) * gap
+      b = { x0: g.x + g.r + 10, w: 340, gap, top, bottom: top + (h.lanes.length - 1) * gap }
+    }
     const pad = 10 / this.T.k
     const loose = this.inner.filter((o) => o.parent === g && !o.hist && !o.flow).length
     const cols = Math.ceil(loose / Math.max(1, g.hist!.lanes.length))
     return { x0: g.x - g.r - 14 / this.T.k - cols * b.gap - pad, x1: b.x0 + b.w * 1.3 + pad, y0: Math.min(g.y - g.r, b.top - b.gap * 2.6) - pad, y1: Math.max(g.y + g.r, b.bottom + b.gap) + pad }
   }
   // A force: history lines do not overlap each other, and no other graph, hub or node stands
-  // inside one. Overlapping lines move apart along the shorter overlap (usually up and down);
+  // inside one. Overlapping lines move apart up and down;
   // anything inside a line's room is pushed out at the nearest edge.
   private histRoom() {
     const kk = Math.floor(this.k)
@@ -926,15 +934,10 @@ export class Engine {
         if (ox <= 0 || oy <= 0) continue
         const ga = hs[i]
         const gb = hs[j]
-        if (oy <= ox) {
-          const s = (a.y0 + a.y1 < b.y0 + b.y1 ? -1 : 1) * oy * 0.5
-          ga.vy = (ga.vy || 0) + s
-          gb.vy = (gb.vy || 0) - s
-        } else {
-          const s = (a.x0 + a.x1 < b.x0 + b.x1 ? -1 : 1) * ox * 0.5
-          ga.vx = (ga.vx || 0) + s
-          gb.vx = (gb.vx || 0) - s
-        }
+        // Always apart up and down: the lines are wide, and their height stays the same at any zoom.
+        const s = (a.y0 + a.y1 < b.y0 + b.y1 ? -1 : 1) * oy * 0.5
+        ga.vy = (ga.vy || 0) + s
+        gb.vy = (gb.vy || 0) - s
       }
     for (const d of this.nodes) {
       if (d.kind === 'n' && (d.hist || d.parent.hist)) continue
