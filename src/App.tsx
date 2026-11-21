@@ -580,11 +580,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             .then((g) => {
               if (mine !== renderToken.current) return
               const by: Record<string, { year: number; lane: string }> = {}
-              let lanes: { key: string; name: string }[] = []
+              let lanes: { key: string; name: string; color?: string }[] = []
               for (const n of g.nodes) {
                 if (n.type === HISTORY_TYPE) {
                   const ls = n.metadata?.lanes
-                  if (Array.isArray(ls)) lanes = ls.filter((l) => l && typeof l === 'object').map((l) => ({ key: String((l as { key?: unknown }).key ?? ''), name: String((l as { name?: unknown }).name ?? (l as { key?: unknown }).key ?? '') }))
+                  if (Array.isArray(ls)) lanes = ls.filter((l) => l && typeof l === 'object').map((l) => ({ key: String((l as { key?: unknown }).key ?? ''), name: String((l as { name?: unknown }).name ?? (l as { key?: unknown }).key ?? ''), color: typeof (l as { color?: unknown }).color === 'string' ? String((l as { color?: unknown }).color) : undefined }))
                   continue
                 }
                 const y = n.metadata?.year

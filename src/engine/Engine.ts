@@ -2,7 +2,7 @@ import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY
 import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
-import { courseOrder, flowOrder, iconKey, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
+import { courseOrder, flowOrder, iconKey, laneColor, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
 import { TRACE_COLOR, traceStrength } from '../lib/searchTrace'
 import { INTEREST_COLOR, interestKey } from '../lib/interest'
 import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, utcMs, versionText, type PulseMode } from '../lib/pulse'
@@ -43,7 +43,7 @@ export interface GraphItem extends Base {
   sem: GraphItem[]
   flowRows: number
   // A history line: nodes that carry metadata.year stand on a time axis, one row per lane.
-  hist?: { y0: number; y1: number; lanes: string[] }
+  hist?: { y0: number; y1: number; lanes: string[]; colors?: string[] }
   // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
   image: string
   // The graph's header image: drawn inside the circle once the circle is large on screen.
@@ -627,7 +627,7 @@ export class Engine {
     return [...out]
   }
   // byNode: each dated event's year and lane (key or name). lanes: the header's rows, top to bottom.
-  setHistory(graphId: string, byNode: Record<string, { year: number; lane: string }>, lanes: { key: string; name: string }[] = []) {
+  setHistory(graphId: string, byNode: Record<string, { year: number; lane: string }>, lanes: { key: string; name: string; color?: string }[] = []) {
     const mine = this.inner.filter((o) => o.parent.id === graphId && byNode[o.nid])
     const g = this.graphs.find((x) => x.id === graphId)
     if (!g || mine.length < 2) return
@@ -643,9 +643,12 @@ export class Engine {
     extra.sort((a, b) => Math.min(...[...first].filter(([l]) => nameOf(l) === a).map(([, y]) => y)) - Math.min(...[...first].filter(([l]) => nameOf(l) === b).map(([, y]) => y)))
     const rows = [...lanes.map((x) => x.name), ...extra]
     const years = mine.map((o) => byNode[o.nid].year)
-    g.hist = { y0: Math.min(...years), y1: Math.max(...years), lanes: rows }
+    g.hist = { y0: Math.min(...years), y1: Math.max(...years), lanes: rows, colors: rows.map((r, i) => laneColor(i, lanes.find((x) => x.name === r)?.color)) }
     for (const o of mine) {
-      o.hist = { year: byNode[o.nid].year, lane: rows.indexOf(nameOf(byNode[o.nid].lane)) }
+      const lane = rows.indexOf(nameOf(byNode[o.nid].lane))
+      o.hist = { year: byNode[o.nid].year, lane }
+      // Each lane's dots in their own colour, so the lanes read apart.
+      o.color = laneColor(lane, lanes.find((x) => x.name === rows[lane])?.color)
       o.r = 2
     }
     // A dated node stands on the line, not on a spoke to its graph.
@@ -1677,8 +1680,9 @@ export class Engine {
           ctx.fillStyle = '#0b1220'
           ctx.fillRect(right - tw - 6 / T.k, y - this.fs(8) * 0.9, tw + 14 / T.k, this.fs(8) * 1.8)
           ctx.globalAlpha = a
-          ctx.fillStyle = '#8fa0b8'
         }
+        // The lane's name in its dots' colour, so it reads as the key to them.
+        ctx.fillStyle = h.colors?.[i] ?? '#8fa0b8'
         ctx.fillText(txt, right, y + this.fs(8) * 0.35)
       })
       ctx.textAlign = 'center'

@@ -155,6 +155,12 @@ export function taskOrder(ns: KgNode[], es: KgEdge[]): string[] {
 
 export type StatusKind = '' | 'open' | 'doing' | 'done'
 export const STATUS_COLOR: Record<string, string> = { open: '#f85149', doing: '#e3a008', done: '#3fb950' }
+// History lines: each lane's dots get their own colour, top to bottom, unless the header's lane
+// names one (metadata.lanes[].color). Clear on the dark map and apart from each other.
+export const LANE_COLORS = ['#e3a008', '#58a6ff', '#3fb950', '#f778ba', '#a371f7', '#ff7b72', '#39c5cf', '#d29922', '#7ee787', '#ffa657', '#79c0ff', '#d2a8ff', '#56d364', '#ff9bce']
+export function laneColor(i: number, own?: string): string {
+  return own && /^#[0-9a-f]{3,8}$/i.test(own) ? own : LANE_COLORS[((i % LANE_COLORS.length) + LANE_COLORS.length) % LANE_COLORS.length]
+}
 export function statusKind(s: unknown): StatusKind {
   const v = String(s || '').toLowerCase().trim()
   if (/^(utført|utfort|ferdig|done|fullført)$/.test(v)) return 'done'

@@ -46,7 +46,7 @@ export interface KgNode {
   // History lines, as the index gives them (2026-11-21): an event's year and lane, a header's lanes.
   year?: number
   lane?: string
-  lanes?: { key: string; name: string }[]
+  lanes?: { key: string; name: string; color?: string }[]
 }
 export interface KgEdge {
   id?: string
