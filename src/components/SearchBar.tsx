@@ -18,12 +18,15 @@ interface Props {
   error: string
   onSearch: (q: string) => void
   onClear: () => void
+  traces: number // graphs that carry a search trace
+  traceDays: number
+  onClearTraces: () => void
 }
 
 // The search field at the top of the map (architect's ask 2026-11-18): write a whole word, press
 // Enter, and the map keeps the graphs that contain it. It searches only the graphs the map shows,
 // so it is offered once meta areas are chosen. Nothing is searched while typing.
-export function SearchBar({ active, busy, found, error, onSearch, onClear }: Props) {
+export function SearchBar({ active, busy, found, error, onSearch, onClear, traces, traceDays, onClearTraces }: Props) {
   const [text, setText] = useState(active)
   // A search started elsewhere (a suggested spelling) or cleared: the field follows.
   useEffect(() => setText(active), [active])
@@ -96,6 +99,14 @@ export function SearchBar({ active, busy, found, error, onSearch, onClear }: Pro
         {!busy && !error && found?.partial && ' The search stopped at its reading limit, so there may be more: choose fewer meta areas.'}
         {!busy && !error && !found && !active && 'Use * for part of a word, for example puls*.'}
       </div>
+      {traces > 0 && (
+        <div className="mapsearchNote">
+          <span className="traceDot" aria-hidden="true" /> {traces.toLocaleString()} {traces === 1 ? 'graph carries' : 'graphs carry'} a search trace (amber, fades over {traceDays} days).{' '}
+          <button type="button" className="ghost" onClick={onClearTraces}>
+            Clear traces
+          </button>
+        </div>
+      )}
     </form>
   )
 }

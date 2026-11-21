@@ -3,6 +3,7 @@ import { select, type Selection } from 'd3-selection'
 import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom'
 import { courseOrder, flowOrder, iconKey, nodeName, STATUS_COLOR, statusKind, taskOrder, type StatusKind } from '../lib/graphRules'
+import { TRACE_COLOR, traceStrength } from '../lib/searchTrace'
 import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, utcMs, versionText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
@@ -218,6 +219,11 @@ export class Engine {
   private found: Map<string, Set<string>> | null = null
   setFound(found: Map<string, Set<string>> | null) {
     this.found = found
+  }
+  // The search trace: when a text search last found each graph (ms), by graph id (lib/searchTrace.ts).
+  private trace: Map<string, { t: number }> = new Map()
+  setTrace(trace: Map<string, { t: number }>) {
+    this.trace = trace
   }
   // Each changed graph's current version number, for the Version mode. Filled in like the counts.
   private pulseVersions: Map<string, number> = new Map()
@@ -1127,6 +1133,7 @@ export class Engine {
         }
       }
     }
+    if (this.trace.size && !this.skeleton) this.drawTrace(kk)
     if (pulseOn) this.drawPulse(kk, now)
     if (this.pulseMode !== 'off' && !this.skeleton && this.detailOn && (this.nodePulse.size || this.nodeWindow)) this.drawNodePulse(kk, now)
     this.drawShares(kk)
@@ -1422,6 +1429,34 @@ export class Engine {
         ctx.arc(d.x, d.y, r0 + p * 14 * px, 0, 6.2832)
         ctx.stroke()
       }
+    }
+  }
+  // The search trace: an amber glow and ring on each graph a search found, weaker for each day
+  // since. It stands still, and inside the pulse ring, so a change and a search are told apart.
+  private drawTrace(kk: number) {
+    const { ctx, T } = this
+    const px = 1 / T.k
+    const t0 = Date.now()
+    ctx.strokeStyle = TRACE_COLOR
+    ctx.fillStyle = TRACE_COLOR
+    ctx.lineWidth = 1.6 * px
+    for (const d of this.graphs) {
+      if (d.order >= kk) continue
+      const tr = this.trace.get(d.id)
+      if (!tr) continue
+      const s = traceStrength(tr.t, t0)
+      if (s <= 0) continue
+      // Never fainter than a quarter: a trace is seen until the day it is gone.
+      const a = (this.isNear(d) ? 0.95 : 0.12) * (0.25 + 0.75 * s)
+      const r = (d.image ? d.r * 1.42 : d.r) + 1.2 * px
+      ctx.beginPath()
+      ctx.arc(d.x, d.y, r + 3 * px, 0, 6.2832)
+      ctx.globalAlpha = a * 0.22
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(d.x, d.y, r, 0, 6.2832)
+      ctx.globalAlpha = a
+      ctx.stroke()
     }
   }
   // Rings in water: n rings travel out from the graph and fade, so 12 changes is twelve rings at once.

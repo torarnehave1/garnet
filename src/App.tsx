@@ -23,6 +23,7 @@ import { isFlowGraph } from './lib/flow'
 import { iconKey } from './lib/graphRules'
 import { kOf, mapState, viewContext, viewLine, type MapState } from './lib/chatContext'
 import { PULSE_MODES, type PulseMode } from './lib/pulse'
+import { addTraces, clearTraces, readTraces, traceAge, TRACE_DAYS, type Traces } from './lib/searchTrace'
 import { usePulse } from './lib/usePulse'
 import { useNodePulse } from './lib/useNodePulse'
 // React Flow is loaded only when a flow is opened.
@@ -364,6 +365,15 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   useEffect(() => {
     engine?.setFound(found ? found.nodes : null)
   }, [engine, found])
+  // The search trace: the graphs a search found keep a colour that fades over the days.
+  const [traces, setTraces] = useState<Traces>(() => readTraces(user.email, Date.now()))
+  useEffect(() => setTraces(readTraces(user.email, Date.now())), [user.email])
+  useEffect(() => {
+    if (found && found.ids.size) setTraces((had) => addTraces(user.email, had, found.ids, found.q, Date.now()))
+  }, [found, user.email])
+  useEffect(() => {
+    engine?.setTrace(traces)
+  }, [engine, traces])
 
   // The graphs the map draws now, for the pulse layer (the drawing effect below works out its own).
   const pulseOn = pulseMode !== 'off'
@@ -872,7 +882,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           Version {__BUILD_COMMIT__} · {new Date(__BUILD_TIME__).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
         </div>
         {canSearch && (
-          <SearchBar active={searchQ} busy={searchBusy} found={found} error={searchErr} onSearch={setSearchQ} onClear={() => setSearchQ('')} />
+          <SearchBar active={searchQ} busy={searchBusy} found={found} error={searchErr} onSearch={setSearchQ} onClear={() => setSearchQ('')} traces={traces.size} traceDays={TRACE_DAYS} onClearTraces={() => setTraces(clearTraces(user.email))} />
         )}
         {!panelsHidden && sw.rate && <RateChart engine={engine} snap={snap} />}
         {!panelsHidden && <PulseBar mode={pulseMode} sum={pulse} nodes={nodePulse} onShow={showGraph} />}
@@ -998,6 +1008,10 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             item={selected}
             user={user}
             N={snap.N}
+            trace={(() => {
+              const tr = selected?.kind === 'g' ? traces.get(selected.id) : undefined
+              return tr ? `Search trace: found by “${tr.q}” ${traceAge(tr.t, Date.now())}.` : undefined
+            })()}
             skeleton={snap.skeleton}
             scopeAll={scope === 'all'}
             pair={pair}
