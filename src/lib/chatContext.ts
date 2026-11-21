@@ -21,6 +21,8 @@ const iso = (ms: number) => new Date(ms).toISOString()
 export function indexArgs(v: ViewState): Record<string, unknown> {
   const f = v.filters
   const a: Record<string, unknown> = { scope: v.scope }
+  // One exact graph (context menu "Show only this graph"): that graph, whatever the other filters say.
+  if (f.graph) return { ...a, graphIds: [f.graph] }
   if (f.world !== '*') a.world = f.world || 'shared'
   if (f.tags.length) a.metaAreas = f.tags
   if (f.type !== '*') a.nodeType = f.type
@@ -47,6 +49,12 @@ export function indexArgs(v: ViewState): Record<string, unknown> {
 function words(v: ViewState) {
   const f = v.filters
   const count = v.kk > 0 && v.kk < v.shown.length ? v.kk : v.shown.length
+  const only = f.graph ? v.shown.find((r) => r.id === f.graph) : null
+  if (f.graph)
+    return {
+      count: v.shown.length,
+      filters: [`Only this one graph, chosen from its context menu: “${only?.title || f.graph}” (graphId ${f.graph}). The other filters do not apply while it is chosen.`],
+    }
   const filters = [
     `Graphs: ${v.scope === 'mine' ? 'only the person’s own' : 'everything the person can see, all Worlds'}`,
     `World: ${f.world === '*' ? 'all' : f.world || SHARED}`,
@@ -108,6 +116,10 @@ export function viewLine(v: ViewState): string {
       : sel.kind === 'n'
         ? `${sel.label} (${sel.parent.title})`
         : sel.tag
+  if (f.graph) {
+    const only = v.shown.find((r) => r.id === f.graph)
+    return [`Only this graph: ${only?.title || f.graph}`, clicked ? `clicked: ${clicked}` : ''].filter(Boolean).join(' · ')
+  }
   return [
     v.scope === 'mine' ? 'Own graphs' : 'All graphs',
     `World ${f.world === '*' ? 'all' : f.world || SHARED}`,
@@ -138,11 +150,11 @@ export function viewContext(v: ViewState): string {
         : `the meta area ${sel.tag}`
 
   return [
-    'WHAT THE PERSON HAS CHOSEN IN GARNET NOW (the network map beside this chat). The person CHOOSES graphs with the filters below: "chosen", "selected", "valgt", "these graphs", "the ones here" mean exactly that set. A clicked item is named separately; use it for "this graph" / "denne grafen".',
+    'WHAT THE PERSON HAS CHOSEN IN GARNET NOW (the network map beside this chat). The person CHOOSES graphs with the filters below: "chosen", "selected", "valgt", "these graphs", "the ones here" mean exactly that set. A clicked item is named separately; use it for "this graph" / "denne grafen". When only one graph is chosen, that graph is also "this graph".',
     'Filters: ' + filters.join(' · '),
     `Chosen graphs: ${count}. Answer "how many" from this number, without a tool.`,
     `Clicked on the map: ${clicked}.`,
-    `To list or read the chosen graphs, call mcp_call with server "vegr", tool_name "graph_index" and exactly these arguments: ${JSON.stringify(indexArgs(v))}. Always add brief:true and limit:40 (a longer answer is cut off before you see it); page on with offset 40, 80, … one call at a time. Add order:"newest" when the question is about the newest or latest graphs. Report only rows you have actually read; never fill in titles or dates you have not seen.`,
+    `To list or read the chosen graphs, call call_tool with name "graph_index" and exactly these arguments: ${JSON.stringify(indexArgs(v))}. Always add brief:true and limit:40 (a longer answer is cut off before you see it); page on with offset 40, 80, … one call at a time. Add order:"newest" when the question is about the newest or latest graphs. Report only rows you have actually read; never fill in titles or dates you have not seen.`,
     // graph_index has no filter for the update time (dev-worker mcp/index-filter.js), so the call above returns more than the chosen set.
     f.updFrom || f.updTo
       ? `The "Last updated between" filter is NOT part of those arguments: of the rows the call returns, keep only those whose updatedAt lies from ${f.updFrom || 'the beginning'} to ${f.updTo || 'now'} (whole days, UTC). If a row shows no updatedAt, say that you cannot tell for that row.`

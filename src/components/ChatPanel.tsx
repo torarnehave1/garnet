@@ -71,6 +71,30 @@ interface Approval {
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi
 
+// The whole chat as plain text, to paste somewhere else (architect 2026-11-21: "I must be able to
+// copy the whole chat as a log"). Questions with what the map showed, each answer's model, its steps
+// with their results, the answer, errors and a change still waiting for a yes.
+function chatLog(msgs: Msg[], email: string): string {
+  const out: string[] = [`Garnet chat · ${email} · copied ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`, '']
+  for (const m of msgs) {
+    if (m.role === 'user') {
+      out.push('## You')
+      if (m.ctx?.line) out.push(`(map: ${m.ctx.line})`)
+      if (m.files?.length) out.push(describe(m.files))
+      if (m.text) out.push(m.text)
+    } else {
+      out.push(`## ${chatModelName(m.model || '') || 'Answer'}`)
+      for (const st of m.steps || [])
+        out.push(st.note ? `  (${st.name})` : `  ${st.ok === null ? '…' : st.ok ? '✓' : '✗'} ${st.name}${st.summary ? ' — ' + st.summary : ''}`)
+      if (m.text) out.push(m.text)
+      if (m.approval) out.push('Waiting for yes / no: ' + m.approval.calls.map((c) => `${c.name} ${JSON.stringify(c.args)}`).join('; '))
+      if (m.error) out.push('Error: ' + m.error)
+    }
+    out.push('')
+  }
+  return out.join('\n')
+}
+
 // A pending change in words: the tool, the graph by its title when the map has it, and the rest
 // of the arguments shortened.
 function callLine(c: PendingCall, title: (id: string) => string | null): { head: string; rest: string } {
@@ -129,6 +153,7 @@ export function ChatPanel({
   const [busy, setBusy] = useState(false)
   const [sessions, setSessions] = useState<ChatSession[] | null>(null) // the History list, when open
   const [histErr, setHistErr] = useState('')
+  const [copied, setCopied] = useState('') // feedback on Copy log
   const sessionId = useRef<string | null>(null)
   const saving = useRef<Promise<void>>(Promise.resolve())
   const [openId, setOpenId] = useState<string | null>(null) // the same id, for drawing the list
@@ -528,6 +553,22 @@ export function ChatPanel({
         {msgs.length > 0 && (
           <button className="ghost" type="button" disabled={busy} onClick={newChat}>
             New chat
+          </button>
+        )}
+        {msgs.length > 0 && (
+          <button
+            className="ghost"
+            type="button"
+            title="Copy the whole chat as text: questions, steps, answers and errors"
+            onClick={() => {
+              navigator.clipboard
+                .writeText(chatLog(msgs, user.email))
+                .then(() => setCopied('Copied'))
+                .catch(() => setCopied('Could not copy'))
+              setTimeout(() => setCopied(''), 2000)
+            }}
+          >
+            {copied || 'Copy log'}
           </button>
         )}
       </div>
