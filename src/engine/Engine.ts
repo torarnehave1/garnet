@@ -10,6 +10,7 @@ import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
 import type { KgGraph, Row } from '../lib/types'
 import { SEED } from './seed'
+import { histSpan, histTicks } from '../lib/historyAxis'
 
 /* ---------- what is drawn ---------- */
 interface Base extends SimulationNodeDatum {
@@ -1576,7 +1577,7 @@ export class Engine {
       let b = boxes.get(d.parent.id)
       if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes, d.parent)))
       const { w, gap, off } = b
-      const span = Math.max(1, h.y1 - h.y0)
+      const span = histSpan(h.y0, h.y1)
       d.x = d.fx = d.parent.x + d.parent.r + off + ((d.hist.year - h.y0) / span) * w
       d.y = d.fy = d.parent.y + (d.hist.lane - (h.lanes.length - 1) / 2) * gap
     }
@@ -1600,15 +1601,15 @@ export class Engine {
         ctx.stroke()
       })
       if (T.k < 3) continue
-      const span = Math.max(1, h.y1 - h.y0)
+      const span = histSpan(h.y0, h.y1)
       ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
       ctx.fillStyle = '#8fa0b8'
       ctx.globalAlpha = this.isNear(g) ? 0.85 : 0.08
       ctx.textAlign = 'center'
-      const step = span > 60 ? 20 : 10
-      for (let y = Math.ceil(h.y0 / step) * step; y <= h.y1; y += step) {
-        const x = x0 + ((y - h.y0) / span) * w
-        ctx.fillText(String(y), x, top - gap * 0.9)
+      // Marks follow the span: decades or years, or months, days or hours for a short history.
+      for (const t of histTicks(h.y0, h.y1)) {
+        const x = x0 + ((t.year - h.y0) / span) * w
+        ctx.fillText(t.label, x, top - gap * 0.9)
       }
       ctx.textAlign = 'center'
     }
