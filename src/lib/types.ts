@@ -69,6 +69,7 @@ export interface Filters {
   updFrom: string // last updated on or after this day (YYYY-MM-DD, UTC), '' for no lower bound
   updTo: string // last updated on or before this day, '' for no upper bound
   world: string
+  graph: string // one exact graph shown alone (its id), '' for all the filters choose
 }
 
 export interface User {

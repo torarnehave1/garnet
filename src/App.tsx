@@ -154,6 +154,7 @@ function writeCache(scope: Scope, user: User | null, rows: Row[]) {
 function reconcile(f: Filters, rows: Row[], worlds: string[]): Filters {
   if (!rows.length) return f
   const out = { ...f }
+  if (out.graph && !rows.some((r) => r.id === out.graph)) out.graph = ''
   if (out.world !== '*' && !worldOptions(rows, worlds).some((o) => o.value === out.world && o.value !== '*')) out.world = '*'
   const wr = worldRows(rows, out.world)
   const tags = new Set(wr.flatMap((r) => r.tags))
@@ -514,7 +515,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     setNodeNote('')
     const shown = shownFor(rows, f)
     engine.build(shown, null, f.type, f.only, !loaded)
-    const wantNodes = !!(shown.length && (f.tags.length || ty))
+    const wantNodes = !!(shown.length && (f.tags.length || ty || f.graph))
     placeRestore(engine, restoreWant, shown, !wantNodes)
     if (!shown.length) return
     // Back to the remembered place, or keep the picture where it is, or frame the result.
@@ -523,10 +524,10 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
         engine.restoreFocus(focusWant.current, () => (focusWant.current = null))
         return
       }
-      if (ty && !(keepView && engine.viewSet)) engine.fitView()
+      if ((ty || f.graph) && !(keepView && engine.viewSet)) engine.fitView()
     }
     settle()
-    if (!f.tags.length && !ty) return
+    if (!f.tags.length && !ty && !f.graph) return
     // Virtual World members hold no nodes on the server: nothing to ask for.
     if (shown.every((r) => r.virtual)) return
     // One request per chosen meta area (a graph under two of them is fetched twice). With only a
@@ -534,7 +535,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
     setNodeNote('loading nodes…')
     const u = userRef.current
     const sc = scopeRef.current
-    const asks = f.tags.length ? f.tags : ['']
+    const asks = f.tags.length && !f.graph ? f.tags : ['']
     // Ask for the graphs that are SHOWN, not for everything the meta area or node type covers:
     // the other filters (World, dates, published …) have already made the selection small.
     const ids = shown.filter((r) => !r.virtual).map((r) => r.id)
@@ -941,6 +942,11 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           y={menu.y}
           onRename={() => askRename(menu.g)}
           onMetaArea={() => askMetaArea(menu.g)}
+          alone={eff.graph === menu.g.id}
+          onAlone={() => {
+            changeFilters({ graph: eff.graph === menu.g.id ? '' : menu.g.id })
+            setMenu(null)
+          }}
           onDelete={() => askDelete(menu.g)}
           onMove={isSuperadmin(user) && worlds.some((w) => w !== menu.g.world) ? () => askMove(menu.g) : undefined}
           onShare={menu.g.world && !menu.g.sharedVia && worlds.some((w) => w !== menu.g.world) ? () => askShare(menu.g) : undefined}
@@ -1080,6 +1086,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           snap={snap}
           filters={eff}
           onFilter={changeFilters}
+          aloneTitle={eff.graph ? rows.find((r) => r.id === eff.graph)?.title || '' : ''}
           onFind={onFind}
           scope={scope}
           onScope={(s) => {

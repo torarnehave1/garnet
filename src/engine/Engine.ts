@@ -485,7 +485,9 @@ export class Engine {
         if (!d) return
         const by = new Map<string, NodeItem>()
         g.r = g.image ? 9 : 5.5
-        const nodesIn = only && type !== '*' ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
+        // Choosing the type history-line means showing the history lines: their events are other
+        // types, so the whole graph is kept.
+        const nodesIn = only && type !== '*' && type !== 'history-line' ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
         nodesIn.forEach((n, i) => {
           const a = i * 2.39996
           const o: NodeItem = {

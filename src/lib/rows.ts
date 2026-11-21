@@ -128,6 +128,8 @@ export function updatedMs(r: { updated: string }): number {
 }
 
 export function shownRows(rows: Row[], f: Filters): Row[] {
+  // One exact graph, chosen from its context menu: that graph alone, whatever the other filters say.
+  if (f.graph) return rows.filter((r) => r.id === f.graph)
   const tags = new Set(f.tags)
   return worldRows(rows, f.world).filter((r) => {
     if (f.year !== '*' && String(yearOf(r)) !== f.year) return false
@@ -153,7 +155,7 @@ export function shownRows(rows: Row[], f: Filters): Row[] {
   })
 }
 
-export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: true, pub: '*', year: '*', since: '*', world: '*', dateFrom: '', dateTo: '', updFrom: '', updTo: '' }
+export const DEFAULT_FILTERS: Filters = { tags: [], type: '*', find: '', only: true, pub: '*', year: '*', since: '*', world: '*', dateFrom: '', dateTo: '', updFrom: '', updTo: '', graph: '' }
 
 // A day as the date filter reads it: from midnight UTC, the way the server's graph_index reads a bare date.
 export const dayStart = (d: string) => Date.parse(d + 'T00:00:00Z')

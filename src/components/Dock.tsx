@@ -28,6 +28,7 @@ export interface DockProps {
   snap: Snapshot
   filters: Filters
   onFilter: (p: Partial<Filters>) => void
+  aloneTitle: string // the title of the one graph shown alone, '' when none
   onFind: (text: string) => void
   scope: Scope
   onScope: (s: Scope) => void
@@ -160,6 +161,13 @@ export function Dock(p: DockProps) {
         />
       </div>
       <div className="opts">
+        {f.graph && (
+          <>
+            <button className="ghost" type="button" title="Only this graph is shown; click to show what the filters choose again" onClick={() => p.onFilter({ graph: '' })}>
+              Only: {p.aloneTitle.length > 40 ? p.aloneTitle.slice(0, 39) + '…' : p.aloneTitle || 'one graph'} ×
+            </button>{' '}
+          </>
+        )}
         <button className="ghost" type="button" disabled={!snap.N || snap.skeleton} title="Add a meta area to, or take one off, every graph shown" onClick={p.onBulkTag}>
           Meta area on {snap.N} shown…
         </button>{' '}
