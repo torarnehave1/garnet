@@ -24,6 +24,9 @@ h1 { font-family: var(--display); font-weight: 600; font-size: clamp(20px, 3.4vw
 .sub { font-family: var(--display); font-style: italic; font-size: 15px; opacity: 0.85; margin-top: 2px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand svg { flex: none; }
+/* "Part of VEGR.AI": the line under the slogan that ties Garnet to the ecosystem. */
+.eco { display: inline-block; margin-top: 3px; font-size: 12px; letter-spacing: 0.04em; color: var(--muted); text-decoration: none; pointer-events: auto; }
+.eco:hover, .eco:focus-visible { color: var(--accent); text-decoration: underline; }
 .stat { color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
 /* The version pill: which commit this page was built from, and when. */
 .ver { display: inline-block; margin-top: 6px; padding: 2px 10px; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; font-variant-numeric: tabular-nums; pointer-events: auto; }

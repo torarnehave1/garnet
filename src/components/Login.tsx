@@ -52,7 +52,7 @@ export function Login({ error }: { error?: string }) {
             English
           </button>
         </div>
-        <Brand big name={b.name} slogan={b.slogan} logoUrl={b.logoUrl} />
+        <Brand big name={b.name} slogan={b.slogan} logoUrl={b.logoUrl} lang={lang} />
         <p className="loginLead" id="loginTitle">
           {l.lead}
         </p>

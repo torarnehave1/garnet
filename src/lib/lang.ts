@@ -27,6 +27,7 @@ export function saveLang(l: Lang) {
 // in the brand graph (metadata.login.no / metadata.login.en).
 export const T = {
   no: {
+    partOf: 'Del av VEGR.AI',
     email: 'E-postadresse',
     sending: 'Sender lenke…',
     sentBody: (e: string) => `En innloggingslenke er på vei til ${e}. Åpne den på denne enheten, så kommer du hit innlogget.`,
@@ -35,6 +36,7 @@ export const T = {
     badLink: (m: string) => `Denne innloggingslenken virket ikke (${m}). Be om en ny under.`,
   },
   en: {
+    partOf: 'Part of VEGR.AI',
     email: 'Email address',
     sending: 'Sending link…',
     sentBody: (e: string) => `A sign-in link is on its way to ${e}. Open it on this device to come back here signed in.`,

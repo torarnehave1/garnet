@@ -1,3 +1,5 @@
+import { readLang, T, type Lang } from '../lib/lang'
+
 // The Garnet mark: a net of knots, one of them lit.
 const L: [number, number, number, number][] = [
   [32, 11, 39, 18], [32, 11, 25, 18], [25, 18, 32, 25], [25, 18, 18, 25], [18, 25, 25, 32], [18, 25, 11, 32], [11, 32, 18, 39],
@@ -12,7 +14,7 @@ const C: [number, number, number, string][] = [
   [32, 53, 2.1, '#6fd3c7'],
 ]
 
-export function Brand({ big = false, name = 'Garnet', slogan = 'De som bøter garnet', logoUrl = '' }: { big?: boolean; name?: string; slogan?: string; logoUrl?: string }) {
+export function Brand({ big = false, name = 'Garnet', slogan = 'De som bøter garnet', logoUrl = '', lang }: { big?: boolean; name?: string; slogan?: string; logoUrl?: string; lang?: Lang }) {
   const size = big ? 64 : 44
   return (
     <div className={big ? 'brand big' : 'brand'}>
@@ -34,6 +36,10 @@ export function Brand({ big = false, name = 'Garnet', slogan = 'De som bøter ga
       <div>
         <h1>{name}</h1>
         <div className="sub">{slogan}</div>
+        {/* Garnet is one part of the VEGR.AI ecosystem; the line says so wherever the brand shows. */}
+        <a className="eco" href="https://vegr.ai" target="_blank" rel="noopener noreferrer">
+          {T[lang ?? readLang()].partOf}
+        </a>
       </div>
     </div>
   )
