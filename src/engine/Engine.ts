@@ -160,6 +160,7 @@ const PT_DATE = -1.3
 const PT_ABOVE = 3.1
 const PT_NOTE = 0.92
 const PT_COL = 30
+const PT_ROW = 2.6 // a row of notes, in gaps: room for its text on up to three lines
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
 const SPREAD_K = 12 // From this zoom (as the Zoom chip shows it), node names spread out.
@@ -690,7 +691,7 @@ export class Engine {
     const mine = this.inner.filter((o) => o.parent.id === graphId && lay.items[o.nid])
     if (!mine.length) return
     g.pt = { cols: lay.cols, sections: lay.sections, rows: lay.rows }
-    g.hist = { y0: 0, y1: Math.max(1, lay.cols.length - 1), lanes: new Array(lay.rows).fill('') }
+    g.hist = { y0: 0, y1: Math.max(1, lay.cols.length - 1), lanes: new Array(Math.ceil(lay.rows * PT_ROW)).fill('') }
     for (const o of mine) {
       const it = lay.items[o.nid]
       o.hist = { year: it.col, lane: it.row }
@@ -1424,9 +1425,25 @@ export class Engine {
           if (d.hist) {
             // A history node's name to the right of it, cut to the room before the next event in
             // its lane; left out when not even the year fits. Click a node to read it whole.
-            // A project timeline's section is named in its band; a note's name stays inside its note.
+            // A project timeline's section is named in its band; a note's name is written whole
+            // inside its note, on as many lines as the note holds.
             if (d.pt?.kind === 'section') continue
-            const room = Math.min((histNext.get(d) ?? Infinity) - d.x - d.r - 5 / T.k, d.pt ? d.pt.right - d.x - d.r - 4 / T.k : Infinity)
+            if (d.pt) {
+              const lh = this.fs(9) * 1.2
+              const fit = Math.max(1, Math.floor((PT_ROW * 0.88 * (d.parent.hist ? this.histBox(d.parent.hist.lanes, d.parent).gap : 9)) / lh))
+              const lines = this.wrapText(d.label, d.pt.right - d.x - d.r - 4 / T.k, fit)
+              if (!lines.length) continue
+              ctx.globalAlpha = this.isNear(d) ? 0.95 : 0.06
+              const fill: string | CanvasGradient | CanvasPattern = ctx.fillStyle
+              ctx.fillStyle = '#e6edf7'
+              ctx.textAlign = 'left'
+              const y0 = d.y - ((lines.length - 1) / 2) * lh + this.fs(9) * 0.35
+              lines.forEach((t, i) => ctx.fillText(t, d.x + d.r + 2 / T.k, y0 + i * lh))
+              ctx.textAlign = 'center'
+              ctx.fillStyle = fill
+              continue
+            }
+            const room = (histNext.get(d) ?? Infinity) - d.x - d.r - 5 / T.k
             const txt = this.fitText(d.label, room)
             if (!txt) continue
             ctx.globalAlpha = this.isNear(d) ? 0.85 : 0.06
@@ -1802,7 +1819,7 @@ export class Engine {
         }
         d.r = d.pt.kind === 'milestone' ? gap * 0.36 : gap * 0.13
         d.x = d.fx = left + Math.max(d.r, gap * 0.15) + gap * 0.12
-        d.y = d.fy = top + d.hist.lane * gap
+        d.y = d.fy = top + (d.hist.lane * PT_ROW + (PT_ROW - 1) / 2) * gap
         continue
       }
       d.x = d.fx = d.parent.x + d.parent.r + off + histFrac(h.y0, h.y1, h.view, d.hist.year) * w
@@ -1983,7 +2000,7 @@ export class Engine {
       const bx = x0 + (d.hist.year + 0.5 - PT_NOTE / 2) * colW
       ctx.globalAlpha = (near ? 1 : 0.1) * (d.pt.kind === 'milestone' ? 0.42 : 0.2)
       ctx.fillStyle = color(d.hist.year)
-      ctx.fillRect(bx, d.y - gap * 0.4, PT_NOTE * colW, gap * 0.8)
+      ctx.fillRect(bx, d.y - gap * PT_ROW * 0.44, PT_NOTE * colW, gap * PT_ROW * 0.88)
     }
     ctx.restore()
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)
@@ -2050,6 +2067,34 @@ export class Engine {
     ctx.fillText(d.label, x, y)
     ctx.textAlign = 'center'
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)
+  }
+  // A label broken into lines that fit the width (the font already set), at most max lines; the
+  // last line ends with … when the label is longer than that.
+  private wrapText(label: string, room: number, max: number): string[] {
+    if (room <= 0) return []
+    const m = (t: string) => this.ctx.measureText(t).width
+    const words = label.split(/\s+/).filter(Boolean)
+    const lines: string[] = []
+    let i = 0
+    while (i < words.length && lines.length < max) {
+      let line = words[i]
+      if (m(line) > room) {
+        // One word wider than the note: cut it.
+        const cut = this.fitText(line, room)
+        if (!cut) break
+        lines.push(cut)
+        i++
+        continue
+      }
+      i++
+      while (i < words.length && m(line + ' ' + words[i]) <= room) line += ' ' + words[i++]
+      lines.push(line)
+    }
+    if (i < words.length && lines.length) {
+      const last = lines.length - 1
+      lines[last] = this.fitText(lines[last] + ' ' + words.slice(i).join(' '), room) || lines[last]
+    }
+    return lines
   }
   // The longest start of a label that fits the width (the font already set), with … when cut.
   // Empty when not even the first word (the year, on a history line) fits.
