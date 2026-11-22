@@ -53,6 +53,7 @@ import {
 } from './lib/rows'
 import type { Filters, KgNode, Row, Scope, User } from './lib/types'
 import { PT_TYPE } from './lib/projectTimeline'
+import { readCards, writeCards } from './lib/cards'
 
 /* ---------- a chat question's view, set back on the map ---------- */
 // After each build: the time slider to the saved cut and the clicked item, found again by id.
@@ -293,6 +294,8 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   const [worlds, setWorlds] = useState<string[]>(() => readWorlds(user))
   // Graphs of the type history-line (they hold a history-line header node).
   const [historyIds, setHistoryIds] = useState<Set<string>>(() => new Set())
+  // Graphs shown as cards instead of a network (lib/cards.ts), chosen in the context menu.
+  const [cardIds, setCardIds] = useState<Set<string>>(() => readCards())
   const eff = useMemo(() => reconcile(filters, rows, worlds), [filters, rows, worlds])
   const effRef = useRef(eff)
   effRef.current = eff
@@ -605,6 +608,17 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             })
             .catch(() => {})
         }
+        // Card view (2026-11-22): a graph the person chose to see as cards is read whole, as its
+        // dates are in metadata; a project timeline keeps its own drawing.
+        for (const [id, g] of Object.entries(detail as Record<string, { nodes: KgNode[] }>)) {
+          if (!cardIds.has(id) || g.nodes.some((n) => n.type === PT_TYPE)) continue
+          loadGraph(u, id)
+            .then((full) => {
+              if (mine !== renderToken.current) return
+              engine.setCards(id, full.nodes)
+            })
+            .catch(() => {})
+        }
         // Course step icons (video, PDF or text): read each course graph once, the same way.
         for (const id of engine.graphsWithCourseSteps())
           loadGraph(u, id)
@@ -631,7 +645,7 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           true,
         )
       })
-  }, [engine, rows, loaded, effKey, found, historyIds])
+  }, [engine, rows, loaded, effKey, found, historyIds, cardIds])
 
   /* ---------- a chat question's view, set back on the map ---------- */
   function restoreView(st: MapState) {
@@ -986,6 +1000,18 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
           alone={eff.graph === menu.g.id}
           onAlone={() => {
             changeFilters({ graph: eff.graph === menu.g.id ? '' : menu.g.id })
+            setMenu(null)
+          }}
+          cards={cardIds.has(menu.g.id)}
+          onCards={() => {
+            const id = menu.g.id
+            setCardIds((had) => {
+              const next = new Set(had)
+              if (next.has(id)) next.delete(id)
+              else next.add(id)
+              writeCards(next)
+              return next
+            })
             setMenu(null)
           }}
           onDelete={() => askDelete(menu.g)}

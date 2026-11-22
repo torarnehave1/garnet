@@ -9,7 +9,8 @@ import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, utcMs, versionText,
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
 import type { KgGraph, KgNode, Row } from '../lib/types'
-import { layoutTimeline, milestoneIcon, PT_TYPE, sectionOf, type PtKind, type PtSection } from '../lib/projectTimeline'
+import { layoutTimeline, milestoneIcon, PT_TYPE, sectionOf, type PtKind, type PtLayout, type PtSection } from '../lib/projectTimeline'
+import { layoutCards } from '../lib/cards'
 import { SEED } from './seed'
 import { EDGE, histFrac, histTicks, type HistView } from '../lib/historyAxis'
 
@@ -507,6 +508,12 @@ export class Engine {
         if (!d) return
         const by = new Map<string, NodeItem>()
         g.r = g.image ? 9 : 5.5
+        // A timeline or card layout is set again after the nodes are read (setProjectTimeline, setCards);
+        // a graph switched back from cards to a network must not keep the old one.
+        if (g.pt) {
+          g.pt = undefined
+          g.hist = undefined
+        }
         // Choosing the type history-line means showing the history lines: their events are other
         // types, so the whole graph is kept.
         const nodesIn = only && type !== '*' && type !== 'history-line' && type !== PT_TYPE ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
@@ -688,8 +695,15 @@ export class Engine {
   // A project timeline: the graph's sections, milestones and dated events in Mermaid timeline
   // order (lib/projectTimeline.ts). nodes: the graph read whole, as its dates are in metadata.
   setProjectTimeline(graphId: string, nodes: KgNode[]) {
+    this.setTimelineLayout(graphId, layoutTimeline(nodes))
+  }
+  // Card view (lib/cards.ts): the graph's dated nodes as cards in columns by month, drawn with the
+  // project timeline's machinery. nodes: the graph read whole, as the dates are in metadata.
+  setCards(graphId: string, nodes: KgNode[]) {
+    this.setTimelineLayout(graphId, layoutCards(nodes))
+  }
+  private setTimelineLayout(graphId: string, lay: PtLayout | null) {
     const g = this.graphs.find((x) => x.id === graphId)
-    const lay = g ? layoutTimeline(nodes) : null
     if (!g || !lay) return
     const mine = this.inner.filter((o) => o.parent.id === graphId && lay.items[o.nid])
     if (!mine.length) return

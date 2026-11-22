@@ -12,6 +12,8 @@ export function ContextMenu({
   onMetaArea,
   alone,
   onAlone,
+  cards,
+  onCards,
   onDelete,
   onMove,
   onShare,
@@ -26,6 +28,8 @@ export function ContextMenu({
   onMetaArea: () => void
   alone: boolean // this graph is the one shown alone
   onAlone: () => void
+  cards: boolean // this graph's nodes are shown as cards (lib/cards.ts)
+  onCards: () => void
   onDelete: () => void
   onMove?: () => void // only when the person may move graphs and there is a World to move to
   onShare?: () => void // only for a graph stored in a World, not one reached through a share
@@ -52,6 +56,9 @@ export function ContextMenu({
       <div className="ctxhead">{graph.title}</div>
       <button type="button" className="ctxitem" role="menuitem" onClick={onAlone}>
         {alone ? 'Show all graphs again' : 'Show only this graph'}
+      </button>
+      <button type="button" className="ctxitem" role="menuitem" onClick={onCards}>
+        {cards ? 'Show nodes as a network' : 'Show nodes as cards'}
       </button>
       <button type="button" className="ctxitem" role="menuitem" onClick={onRename}>
         Rename graph…
