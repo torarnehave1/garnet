@@ -160,6 +160,7 @@ const PT_DATE = -1.3
 const PT_ABOVE = 3.1
 const PT_NOTE = 0.92
 const PT_COL = 30
+const PT_TEXT = 6.2 // the notes' font size, before scaling (the dates use 8)
 const PT_ROW = 2.6 // a row of notes, in gaps: room for its text on up to three lines
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
@@ -1429,18 +1430,25 @@ export class Engine {
             // inside its note, on as many lines as the note holds.
             if (d.pt?.kind === 'section') continue
             if (d.pt) {
-              const lh = this.fs(9) * 1.2
+              // Smaller than the dates, as in Mermaid, so a note holds a sentence.
+              const font = ctx.font
+              ctx.font = this.fs(PT_TEXT) + "px 'IBM Plex Sans',system-ui,sans-serif"
+              const lh = this.fs(PT_TEXT) * 1.18
               const fit = Math.max(1, Math.floor((PT_ROW * 0.88 * (d.parent.hist ? this.histBox(d.parent.hist.lanes, d.parent).gap : 9)) / lh))
               const lines = this.wrapText(d.label, d.pt.right - d.x - d.r - 4 / T.k, fit)
-              if (!lines.length) continue
+              if (!lines.length) {
+                ctx.font = font
+                continue
+              }
               ctx.globalAlpha = this.isNear(d) ? 0.95 : 0.06
               const fill: string | CanvasGradient | CanvasPattern = ctx.fillStyle
               ctx.fillStyle = '#e6edf7'
               ctx.textAlign = 'left'
-              const y0 = d.y - ((lines.length - 1) / 2) * lh + this.fs(9) * 0.35
+              const y0 = d.y - ((lines.length - 1) / 2) * lh + this.fs(PT_TEXT) * 0.35
               lines.forEach((t, i) => ctx.fillText(t, d.x + d.r + 2 / T.k, y0 + i * lh))
               ctx.textAlign = 'center'
               ctx.fillStyle = fill
+              ctx.font = font
               continue
             }
             const room = (histNext.get(d) ?? Infinity) - d.x - d.r - 5 / T.k
@@ -2079,11 +2087,11 @@ export class Engine {
     while (i < words.length && lines.length < max) {
       let line = words[i]
       if (m(line) > room) {
-        // One word wider than the note: cut it.
-        const cut = this.fitText(line, room)
-        if (!cut) break
-        lines.push(cut)
-        i++
+        // One word wider than the note: as much of it as fits, the rest on the next line.
+        let n = line.length - 1
+        while (n > 1 && m(line.slice(0, n)) > room) n--
+        lines.push(line.slice(0, n))
+        words[i] = line.slice(n)
         continue
       }
       i++
