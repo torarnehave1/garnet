@@ -6,7 +6,9 @@
 //   project-timeline            the header: label = the timeline's name
 //   project-timeline-section    a period: metadata { from, to (YYYY-MM-DD), color? }
 //   project-timeline-milestone  a milestone: metadata { date (YYYY-MM-DD), icon? (Lucide name), color? }
-//   any other node with metadata.date (YYYY-MM-DD) is an event
+//   project-timeline-event      an event: metadata { date, kind?, participants?, from?, to?, source? }
+//   any other node with metadata.date (YYYY-MM-DD) is an event too
+//   a milestone without a date stands in a last column, "Not dated"
 //
 // An event and a milestone belong to a section by their date; no edges are needed. Dates stand in
 // columns of equal width, as Mermaid draws them, not on a linear time scale.
@@ -124,6 +126,8 @@ export interface PtLayout {
 export function layoutTimeline(nodes: KgNode[]): PtLayout | null {
   const dated: { n: KgNode; d: string; kind: 'event' | 'milestone' }[] = []
   const secs: { n: KgNode; from: string; to: string }[] = []
+  // Milestones with no date yet (agreed on, not planned in time): a last column of their own.
+  const undated: KgNode[] = []
   for (const n of nodes) {
     if (n.type === PT_TYPE) continue
     const md = n.metadata || {}
@@ -135,6 +139,7 @@ export function layoutTimeline(nodes: KgNode[]): PtLayout | null {
     }
     const d = day(md.date)
     if (d) dated.push({ n, d, kind: n.type === PT_MILESTONE ? 'milestone' : 'event' })
+    else if (n.type === PT_MILESTONE) undated.push(n)
   }
   if (!dated.length) return null
   const days = [...new Set(dated.map((x) => x.d))].sort()
@@ -158,7 +163,13 @@ export function layoutTimeline(nodes: KgNode[]): PtLayout | null {
     sections.push(sec)
     items[s.n.id] = { col: sec.c0, row: -2, kind: 'section', color: sec.color }
   }
-  return { cols: days.map((d) => dateLabel(d, withYear)), sections, rows: Math.max(1, ...fill), items }
+  const cols = days.map((d) => dateLabel(d, withYear))
+  if (undated.length) {
+    const c = cols.push('Not dated') - 1
+    undated.forEach((n, i) => (items[n.id] = { col: c, row: i, kind: 'milestone', icon: str(n.metadata?.icon), color: str(n.metadata?.color) }))
+    fill.push(undated.length)
+  }
+  return { cols, sections, rows: Math.max(1, ...fill), items }
 }
 
 /** The section a column belongs to, if any. */
