@@ -1574,6 +1574,8 @@ export class Engine {
       const sx = d.x * T.k + T.x
       const sy = d.y * T.k + T.y
       if (sx < -px || sy < -px || sx > W + px || sy > H + px) continue // outside the window
+      // In a project timeline only a milestone has an icon: an event is its box, with no type icon.
+      if (d.pt && d.pt.kind !== 'milestone') continue
       const icon = d.pt?.kind === 'milestone' ? milestoneIcon(d.pt.icon) : typeIcon(d.icon)
       if (!icon) continue
       const s = (d.r * ICON_FILL * 2) / 24
