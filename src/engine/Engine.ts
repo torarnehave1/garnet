@@ -48,7 +48,7 @@ export interface GraphItem extends Base {
   // A project timeline (2026-11-22): drawn as a Mermaid timeline on top of the history-line room.
   // Its dated nodes carry hist too (year = column, lane = row), so the room, the forces and the
   // framing of a history line serve it; only the placing and the drawing are its own.
-  pt?: { cols: string[]; sections: PtSection[]; rows: number }
+  pt?: { cols: string[]; sections: PtSection[]; rows: number; bottom?: number }
   // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
   image: string
   // The graph's header image: drawn inside the circle once the circle is large on screen.
@@ -75,7 +75,7 @@ export interface NodeItem extends Base {
   flow: { row: number; num: number } | null
   hist: { year: number; lane: number } | null
   // A node of a project timeline: what it is there, its milestone icon, and the right edge of its note.
-  pt: { kind: PtKind; icon?: string; right: number } | null
+  pt: { kind: PtKind; icon?: string; right: number; left?: number; top?: number; w?: number; h?: number; lines?: string[] } | null
   status: StatusKind
   upd: number // when the node's content last changed (ms), 0 when the server gave no time
 }
@@ -160,7 +160,7 @@ const PT_DATE = -1.3
 const PT_ABOVE = 3.1
 const PT_NOTE = 0.92
 const PT_COL = 30
-const PT_TEXT = 6.2 // the notes' font size, before scaling (the dates use 8)
+const PT_TEXT = 6.6 // the notes' font size, before scaling (the dates use 8)
 const PT_ROW = 2.6 // a row of notes, in gaps: room for its text on up to three lines
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
@@ -1266,6 +1266,8 @@ export class Engine {
         if (d.order >= kk) continue
         ctx.globalAlpha = this.isNear(d) ? 0.85 : 0.1
         ctx.fillStyle = (d.status && STATUS_COLOR[d.status]) || d.color
+        // A project timeline's event is its box, and its section is its band: no dot for them.
+        if (d.pt && d.pt.kind !== 'milestone') continue
         // Flow and task column nodes are squares; every other node is a dot.
         if (d.flow) {
           ctx.fillRect(d.x - d.r, d.y - d.r, d.r * 2, d.r * 2)
@@ -1429,28 +1431,7 @@ export class Engine {
             // A project timeline's section is named in its band; a note's name is written whole
             // inside its note, on as many lines as the note holds.
             if (d.pt?.kind === 'section') continue
-            if (d.pt) {
-              // Smaller than the dates, as in Mermaid, so a note holds a sentence.
-              const font = ctx.font
-              ctx.font = this.fs(PT_TEXT) + "px 'IBM Plex Sans',system-ui,sans-serif"
-              const lh = this.fs(PT_TEXT) * 1.18
-              const fit = Math.max(1, Math.floor((PT_ROW * 0.88 * (d.parent.hist ? this.histBox(d.parent.hist.lanes, d.parent).gap : 9)) / lh))
-              const lines = this.wrapText(d.label, d.pt.right - d.x - d.r - 4 / T.k, fit)
-              if (!lines.length) {
-                ctx.font = font
-                continue
-              }
-              ctx.globalAlpha = this.isNear(d) ? 0.95 : 0.06
-              const fill: string | CanvasGradient | CanvasPattern = ctx.fillStyle
-              ctx.fillStyle = '#e6edf7'
-              ctx.textAlign = 'left'
-              const y0 = d.y - ((lines.length - 1) / 2) * lh + this.fs(PT_TEXT) * 0.35
-              lines.forEach((t, i) => ctx.fillText(t, d.x + d.r + 2 / T.k, y0 + i * lh))
-              ctx.textAlign = 'center'
-              ctx.fillStyle = fill
-              ctx.font = font
-              continue
-            }
+            if (d.pt) continue // written inside its box (drawProjectTimeline)
             const room = (histNext.get(d) ?? Infinity) - d.x - d.r - 5 / T.k
             const txt = this.fitText(d.label, room)
             if (!txt) continue
@@ -1825,9 +1806,10 @@ export class Engine {
           d.y = d.fy = top + PT_BAND * gap
           continue
         }
-        d.r = d.pt.kind === 'milestone' ? gap * 0.36 : gap * 0.13
-        d.x = d.fx = left + Math.max(d.r, gap * 0.15) + gap * 0.12
-        d.y = d.fy = top + (d.hist.lane * PT_ROW + (PT_ROW - 1) / 2) * gap
+        d.pt.left = left
+        d.pt.w = PT_NOTE * colW
+        d.x = d.fx = left
+        d.y = d.fy = top
         continue
       }
       d.x = d.fx = d.parent.x + d.parent.r + off + histFrac(h.y0, h.y1, h.view, d.hist.year) * w
@@ -1835,6 +1817,47 @@ export class Engine {
       d.r = 2
     }
     this.unpackHistory()
+    this.stackTimelines()
+  }
+  // A project timeline's notes, as Mermaid stacks them: under each date one box per event, each
+  // box as tall as its text (plain, centred, wrapped at spaces), a small gap between the boxes.
+  private stackTimelines() {
+    const { ctx, T } = this
+    const cols = new Map<string, NodeItem[]>()
+    for (const d of this.inner) {
+      if (!d.pt || !d.hist || d.pt.kind === 'section' || !d.parent.pt) continue
+      const key = d.parent.id + '|' + d.hist.year
+      const l = cols.get(key)
+      if (l) l.push(d)
+      else cols.set(key, [d])
+    }
+    if (!cols.size) return
+    const close = T.k >= 3
+    ctx.font = this.fs(PT_TEXT) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    const lh = this.fs(PT_TEXT) * 1.3
+    const bottoms = new Map<GraphItem, number>()
+    for (const list of cols.values()) {
+      list.sort((a, b) => a.hist!.lane - b.hist!.lane)
+      const g = list[0].parent
+      const { gap } = this.histBox(g.hist!.lanes, g)
+      const pad = close ? lh * 0.45 : gap * 0.1
+      let y = g.y - ((g.hist!.lanes.length - 1) / 2) * gap
+      for (const d of list) {
+        const pt = d.pt!
+        const w = pt.w!
+        const icon = pt.kind === 'milestone' ? gap * 0.8 : 0
+        pt.lines = close ? this.wrapText(d.label, w - pad * 2 - icon, 8) : []
+        const h = close ? Math.max(1, pt.lines.length) * lh + pad * 1.4 : gap * 0.8
+        pt.top = y
+        pt.h = h
+        d.r = pt.kind === 'milestone' ? Math.min(gap * 0.36, h * 0.4) : Math.min(w, h) * 0.45
+        d.x = d.fx = pt.kind === 'milestone' ? pt.left! + pad * 0.6 + d.r : pt.left! + w / 2
+        d.y = d.fy = y + h / 2
+        y += h + (close ? lh * 0.45 : gap * 0.2)
+      }
+      bottoms.set(g, Math.max(bottoms.get(g) ?? -Infinity, y))
+    }
+    for (const [g, b] of bottoms) if (g.pt) g.pt.bottom = b
   }
   // Events in the same lane that would cover each other (and so each other's names) get half the
   // size, and each is moved right just enough to clear the one before it.
@@ -1959,7 +1982,7 @@ export class Engine {
       ctx.fillText(txt, bx + bw / 2, by + gap * 0.43)
     }
     // The dashed line down each column, behind the notes.
-    const bottom = top + (h.lanes.length - 1) * gap + gap * 0.55
+    const bottom = (pt.bottom ?? top + (h.lanes.length - 1) * gap) + gap * 0.55
     ctx.globalAlpha = near ? 0.35 : 0.05
     ctx.strokeStyle = '#8fa0b8'
     ctx.lineWidth = 0.6 * px
@@ -2002,13 +2025,31 @@ export class Engine {
       ctx.fillStyle = '#0b1220'
       ctx.fillText(txt, bx + (PT_NOTE * colW) / 2, by + gap * 0.39)
     }
-    // A note behind each event and milestone; a milestone's note is the stronger.
+    // Each event as a light box in its section's colour with its text in dark, plain and centred;
+    // a milestone as a full-coloured box with white text beside its icon.
+    ctx.font = this.fs(PT_TEXT) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    const lh = this.fs(PT_TEXT) * 1.3
     for (const d of this.inner) {
-      if (d.parent !== g || !d.pt || !d.hist || d.pt.kind === 'section') continue
-      const bx = x0 + (d.hist.year + 0.5 - PT_NOTE / 2) * colW
-      ctx.globalAlpha = (near ? 1 : 0.1) * (d.pt.kind === 'milestone' ? 0.42 : 0.2)
-      ctx.fillStyle = color(d.hist.year)
-      ctx.fillRect(bx, d.y - gap * PT_ROW * 0.44, PT_NOTE * colW, gap * PT_ROW * 0.88)
+      const p = d.pt
+      if (d.parent !== g || !p || !d.hist || p.kind === 'section' || p.top == null) continue
+      const mile = p.kind === 'milestone'
+      const a = near ? 1 : 0.1
+      ctx.globalAlpha = a
+      ctx.fillStyle = mile ? d.color : color(d.hist.year)
+      ctx.fillRect(p.left!, p.top, p.w!, p.h!)
+      if (!mile) {
+        // Lighten the section's colour, as Mermaid's notes are paler than their date.
+        ctx.globalAlpha = a * 0.5
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(p.left!, p.top, p.w!, p.h!)
+      }
+      if (!named || !p.lines?.length) continue
+      ctx.globalAlpha = a
+      ctx.fillStyle = mile ? '#ffffff' : '#1f2937'
+      const iconW = mile ? d.r * 2 + gap * 0.2 : 0
+      const cx = p.left! + iconW + (p.w! - iconW) / 2
+      const y0 = p.top + p.h! / 2 - ((p.lines.length - 1) / 2) * lh
+      p.lines.forEach((t, i) => ctx.fillText(t, cx, y0 + i * lh))
     }
     ctx.restore()
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)
