@@ -159,8 +159,10 @@ const PT_BAND = -2.45
 const PT_DATE = -1.3
 const PT_ABOVE = 3.1
 const PT_NOTE = 0.92
-const PT_COL = 30
-const PT_TEXT = 6.6 // the notes' font size, before scaling (the dates use 8)
+const PT_COL = 36 // a column's width in map units: fixed, so the timeline zooms as one picture
+const PT_GAP = 9 // a row's height in map units
+const PT_FONT = 3.2 // the notes' text in map units (the band and dates a little larger)
+const PT_READ_PX = 5 // text is written once it is at least this tall on the screen
 const PT_ROW = 2.6 // a row of notes, in gaps: room for its text on up to three lines
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
@@ -1767,7 +1769,7 @@ export class Engine {
       off = laneW + Math.max(0, titleW / 2 - (g?.r ?? 0)) + 12 / this.T.k
     }
     // A project timeline: one column of equal width per date, as Mermaid draws it.
-    if (g?.pt) return { w: g.pt.cols.length * (close ? PT_COL * Math.pow(this.T.k / 3, 0.6) : 7), gap: close ? 9 : 4.5, off }
+    if (g?.pt) return { w: g.pt.cols.length * PT_COL, gap: PT_GAP, off: 10 }
     return { w: close ? 340 * Math.pow(this.T.k / 3, 0.6) : 120, gap: close ? 9 : 4.5, off }
   }
   // History nodes follow their graph: x from the year, y from the lane.
@@ -1824,7 +1826,7 @@ export class Engine {
   // A project timeline's notes, as Mermaid stacks them: under each date one box per event, each
   // box as tall as its text (plain, centred, wrapped at spaces), a small gap between the boxes.
   private stackTimelines() {
-    const { ctx, T } = this
+    const { ctx } = this
     const cols = new Map<string, NodeItem[]>()
     for (const d of this.inner) {
       if (!d.pt || !d.hist || d.pt.kind === 'section' || !d.parent.pt) continue
@@ -1834,32 +1836,38 @@ export class Engine {
       else cols.set(key, [d])
     }
     if (!cols.size) return
-    const close = T.k >= 3
-    ctx.font = this.fs(PT_TEXT) + "px 'IBM Plex Sans',system-ui,sans-serif"
-    const lh = this.fs(PT_TEXT) * 1.3
+    ctx.font = PT_FONT + "px 'IBM Plex Sans',system-ui,sans-serif"
+    const lh = PT_FONT * 1.3
     const bottoms = new Map<GraphItem, number>()
     for (const list of cols.values()) {
       list.sort((a, b) => a.hist!.lane - b.hist!.lane)
       const g = list[0].parent
       const { gap } = this.histBox(g.hist!.lanes, g)
-      const pad = close ? lh * 0.45 : gap * 0.1
+      const pad = lh * 0.45
       let y = g.y - ((g.hist!.lanes.length - 1) / 2) * gap
       for (const d of list) {
         const pt = d.pt!
         const w = pt.w!
         const icon = pt.kind === 'milestone' ? gap * 0.8 : 0
-        pt.lines = close ? this.wrapText(d.label, w - pad * 2 - icon, 8) : []
-        const h = close ? Math.max(1, pt.lines.length) * lh + pad * 1.4 : gap * 0.8
+        pt.lines = this.wrapText(d.label, w - pad * 2 - icon, 8)
+        const h = Math.max(1, pt.lines.length) * lh + pad * 1.4
         pt.top = y
         pt.h = h
         d.r = pt.kind === 'milestone' ? Math.min(gap * 0.36, h * 0.4) : Math.min(w, h) * 0.45
         d.x = d.fx = pt.kind === 'milestone' ? pt.left! + pad * 0.6 + d.r : pt.left! + w / 2
         d.y = d.fy = y + h / 2
-        y += h + (close ? lh * 0.45 : gap * 0.2)
+        y += h + lh * 0.45
       }
       bottoms.set(g, Math.max(bottoms.get(g) ?? -Infinity, y))
     }
-    for (const [g, b] of bottoms) if (g.pt) g.pt.bottom = b
+    for (const [g, b] of bottoms) {
+      if (!g.pt || !g.hist) continue
+      g.pt.bottom = b
+      // The room below the axis grows to the tallest column, so other graphs keep out of it.
+      const top = g.y - ((g.hist.lanes.length - 1) / 2) * PT_GAP
+      const need = Math.ceil((b - top) / PT_GAP) + 1
+      if (need > g.hist.lanes.length) g.hist.lanes = new Array(need).fill('')
+    }
   }
   // Events in the same lane that would cover each other (and so each other's names) get half the
   // size, and each is moved right just enough to clear the one before it.
@@ -1961,14 +1969,14 @@ export class Engine {
     const x0 = g.x + g.r + off
     const top = g.y - ((h.lanes.length - 1) / 2) * gap
     const near = this.isNear(g)
-    const named = T.k >= 3
+    const named = PT_FONT * T.k >= PT_READ_PX
     const color = (c: number) => sectionOf(pt, c)?.color ?? g.color
     const px = 1 / T.k
     ctx.save()
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     // Sections: one band over the columns each covers.
-    ctx.font = '600 ' + this.fs(8.5) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    ctx.font = '600 ' + PT_FONT * 1.25 + "px 'IBM Plex Sans',system-ui,sans-serif"
     for (const s of pt.sections) {
       const bx = x0 + s.c0 * colW + px
       const bw = (s.c1 - s.c0 + 1) * colW - 2 * px
@@ -2013,7 +2021,7 @@ export class Engine {
     ctx.closePath()
     ctx.fill()
     // A date box per column.
-    ctx.font = '600 ' + this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    ctx.font = '600 ' + PT_FONT * 1.15 + "px 'IBM Plex Sans',system-ui,sans-serif"
     for (let c = 0; c < n; c++) {
       const bx = x0 + (c + 0.5 - PT_NOTE / 2) * colW
       const by = top + PT_DATE * gap - gap * 0.38
@@ -2029,8 +2037,8 @@ export class Engine {
     }
     // Each event as a light box in its section's colour with its text in dark, plain and centred;
     // a milestone as a full-coloured box with white text beside its icon.
-    ctx.font = this.fs(PT_TEXT) + "px 'IBM Plex Sans',system-ui,sans-serif"
-    const lh = this.fs(PT_TEXT) * 1.3
+    ctx.font = PT_FONT + "px 'IBM Plex Sans',system-ui,sans-serif"
+    const lh = PT_FONT * 1.3
     for (const d of this.inner) {
       const p = d.pt
       if (d.parent !== g || !p || !d.hist || p.kind === 'section' || p.top == null) continue
