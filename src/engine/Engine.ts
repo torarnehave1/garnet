@@ -1234,6 +1234,8 @@ export class Engine {
         if (l.source.order >= kk) continue
         // On a history line the "grew into" lines stay faint so they do not cut through the names.
         const hl = l.source.hist && l.target.hist
+        // A project timeline's section stands in its band: an edge to it would cut across the band.
+        if ((l.source as NodeItem).pt?.kind === 'section' || (l.target as NodeItem).pt?.kind === 'section') continue
         ctx.globalAlpha = sel ? (touches(l) ? 0.9 : 0.04) : hl ? 0.14 : 0.4
         line(l.source, l.target)
       }
