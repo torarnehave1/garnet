@@ -15,6 +15,7 @@ import {
   CreditCard,
   Database,
   FileText,
+  ChartGantt,
   GraduationCap,
   Heading,
   Image,
@@ -33,6 +34,7 @@ import {
   Presentation,
   Quote,
   Route,
+  Rows3,
   ScanSearch,
   Sparkles,
   StickyNote,
@@ -91,6 +93,9 @@ const ICONS: Record<string, IconNode> = {
   piechart: ChartPie,
   bubblechart: ChartScatter,
   timeline: Clock,
+  // Project timelines (2026-11-22): the header and its periods. A milestone draws its own icon.
+  'project-timeline': ChartGantt,
+  'project-timeline-section': Rows3,
   map: MapIcon,
   swot: LayoutGrid,
   oppgave: Check,
@@ -160,6 +165,9 @@ function toPath(icon: IconNode): Path2D {
   }
   return p
 }
+
+/** A Lucide icon as a path in a 24 × 24 box. */
+export const iconPath = toPath
 
 const paths = new Map<string, Path2D | null>()
 

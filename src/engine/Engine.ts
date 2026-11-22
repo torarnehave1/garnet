@@ -8,7 +8,8 @@ import { INTEREST_COLOR, interestKey } from '../lib/interest'
 import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, utcMs, versionText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
-import type { KgGraph, Row } from '../lib/types'
+import type { KgGraph, KgNode, Row } from '../lib/types'
+import { layoutTimeline, milestoneIcon, PT_TYPE, sectionOf, type PtKind, type PtSection } from '../lib/projectTimeline'
 import { SEED } from './seed'
 import { EDGE, histFrac, histTicks, type HistView } from '../lib/historyAxis'
 
@@ -44,6 +45,10 @@ export interface GraphItem extends Base {
   flowRows: number
   // A history line: nodes that carry metadata.year stand on a time axis, one row per lane.
   hist?: { y0: number; y1: number; lanes: string[]; colors?: string[]; view?: HistView }
+  // A project timeline (2026-11-22): drawn as a Mermaid timeline on top of the history-line room.
+  // Its dated nodes carry hist too (year = column, lane = row), so the room, the forces and the
+  // framing of a history line serve it; only the placing and the drawing are its own.
+  pt?: { cols: string[]; sections: PtSection[]; rows: number }
   // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
   image: string
   // The graph's header image: drawn inside the circle once the circle is large on screen.
@@ -69,6 +74,8 @@ export interface NodeItem extends Base {
   links: NodeItem[]
   flow: { row: number; num: number } | null
   hist: { year: number; lane: number } | null
+  // A node of a project timeline: what it is there, its milestone icon, and the right edge of its note.
+  pt: { kind: PtKind; icon?: string; right: number } | null
   status: StatusKind
   upd: number // when the node's content last changed (ms), 0 when the server gave no time
 }
@@ -146,6 +153,13 @@ export interface EngineEvents {
   onUserMove(): void
 }
 
+// A project timeline, in rows of its gap: the section bands and the date boxes stand above the
+// first row of notes; how much of a column a note fills; a column's width at zoom 3.
+const PT_BAND = -2.45
+const PT_DATE = -1.3
+const PT_ABOVE = 3.1
+const PT_NOTE = 0.92
+const PT_COL = 30
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
 const SPREAD_K = 12 // From this zoom (as the Zoom chip shows it), node names spread out.
@@ -491,7 +505,7 @@ export class Engine {
         g.r = g.image ? 9 : 5.5
         // Choosing the type history-line means showing the history lines: their events are other
         // types, so the whole graph is kept.
-        const nodesIn = only && type !== '*' && type !== 'history-line' ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
+        const nodesIn = only && type !== '*' && type !== 'history-line' && type !== PT_TYPE ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
         nodesIn.forEach((n, i) => {
           const a = i * 2.39996
           const o: NodeItem = {
@@ -510,6 +524,7 @@ export class Engine {
             links: [],
             flow: null,
             hist: null,
+            pt: null,
             // Task state lives in the node's own data (metadata.status).
             status: n.type === 'oppgave' ? statusKind(n.metadata?.status) : '',
             upd: utcMs(n.updatedAt),
@@ -543,6 +558,7 @@ export class Engine {
         g.flowRows = row
         if (head) this.flowLinks.push({ source: g, target: head, stem: true })
         g.hist = undefined
+        g.pt = undefined
         nodesIn.forEach((n) => {
           const o = by.get(n.id)!
           if (!o.flow && !o.hist) this.containLinks.push({ source: o, target: g })
@@ -658,6 +674,29 @@ export class Engine {
       o.r = 2
     }
     // A dated node stands on the line, not on a spoke to its graph.
+    for (let i = this.containLinks.length - 1; i >= 0; i--) if ((this.containLinks[i].source as NodeItem).hist) this.containLinks.splice(i, 1)
+    const sim = this.sim
+    if (!sim) return
+    ;(sim.force('contain') as ReturnType<typeof forceLink<Item, Link>> | undefined)?.links(this.containLinks)
+    sim.alpha(Math.max(sim.alpha(), 0.1)).restart()
+  }
+
+  // A project timeline: the graph's sections, milestones and dated events in Mermaid timeline
+  // order (lib/projectTimeline.ts). nodes: the graph read whole, as its dates are in metadata.
+  setProjectTimeline(graphId: string, nodes: KgNode[]) {
+    const g = this.graphs.find((x) => x.id === graphId)
+    const lay = g ? layoutTimeline(nodes) : null
+    if (!g || !lay) return
+    const mine = this.inner.filter((o) => o.parent.id === graphId && lay.items[o.nid])
+    if (!mine.length) return
+    g.pt = { cols: lay.cols, sections: lay.sections, rows: lay.rows }
+    g.hist = { y0: 0, y1: Math.max(1, lay.cols.length - 1), lanes: new Array(lay.rows).fill('') }
+    for (const o of mine) {
+      const it = lay.items[o.nid]
+      o.hist = { year: it.col, lane: it.row }
+      o.pt = { kind: it.kind, icon: it.icon, right: 0 }
+      o.color = it.color ?? sectionOf(lay, it.col)?.color ?? g.color
+    }
     for (let i = this.containLinks.length - 1; i >= 0; i--) if ((this.containLinks[i].source as NodeItem).hist) this.containLinks.splice(i, 1)
     const sim = this.sim
     if (!sim) return
@@ -791,7 +830,7 @@ export class Engine {
       const h = g.hist
       if (!h) continue
       const { w, gap, off } = this.histBox(h.lanes, g)
-      add(g.x + g.r + off + w, g.y - (h.lanes.length / 2 + 1) * gap)
+      add(g.x + g.r + off + w, g.y - (h.lanes.length / 2 + (g.pt ? PT_ABOVE + 0.5 : 1)) * gap)
       add(g.x - off, g.y + (h.lanes.length / 2 + 1) * gap)
     }
     return isFinite(x0) ? { x0, y0, x1, y1 } : null
@@ -890,7 +929,7 @@ export class Engine {
     const p = this.toMap(clientX, clientY)
     const kk = Math.floor(this.k)
     for (const g of this.graphs) {
-      if (!g.hist || g.order >= kk) continue
+      if (!g.hist || g.pt || g.order >= kk) continue
       const b = this.histBoxOf(g)!
       if (p.x < g.x + g.r || p.x > b.x0 + b.w) continue
       const lane = Math.round((p.y - b.top) / b.gap)
@@ -910,12 +949,12 @@ export class Engine {
     if (this.T.k < 3) {
       const gap = 9
       const top = g.y - ((h.lanes.length - 1) / 2) * gap
-      b = { x0: g.x + g.r + 10, w: 340, gap, top, bottom: top + (h.lanes.length - 1) * gap }
+      b = { x0: g.x + g.r + 10, w: g.pt ? g.pt.cols.length * PT_COL : 340, gap, top, bottom: top + (h.lanes.length - 1) * gap }
     }
     const pad = 10 / this.T.k
     const loose = this.inner.filter((o) => o.parent === g && !o.hist && !o.flow).length
     const cols = Math.ceil(loose / Math.max(1, g.hist!.lanes.length))
-    return { x0: g.x - g.r - 14 / this.T.k - cols * b.gap - pad, x1: b.x0 + b.w * 1.3 + pad, y0: Math.min(g.y - g.r, b.top - b.gap * 2.6) - pad, y1: Math.max(g.y + g.r, b.bottom + b.gap) + pad }
+    return { x0: g.x - g.r - 14 / this.T.k - cols * b.gap - pad, x1: b.x0 + b.w * 1.3 + pad, y0: Math.min(g.y - g.r, b.top - b.gap * (g.pt ? PT_ABOVE : 2.6)) - pad, y1: Math.max(g.y + g.r, b.bottom + b.gap) + pad }
   }
   // A force: history lines do not overlap each other, and no other graph, hub or node stands
   // inside one. Overlapping lines move apart up and down;
@@ -1383,7 +1422,9 @@ export class Engine {
           if (d.hist) {
             // A history node's name to the right of it, cut to the room before the next event in
             // its lane; left out when not even the year fits. Click a node to read it whole.
-            const room = (histNext.get(d) ?? Infinity) - d.x - d.r - 5 / T.k
+            // A project timeline's section is named in its band; a note's name stays inside its note.
+            if (d.pt?.kind === 'section') continue
+            const room = Math.min((histNext.get(d) ?? Infinity) - d.x - d.r - 5 / T.k, d.pt ? d.pt.right - d.x - d.r - 4 / T.k : Infinity)
             const txt = this.fitText(d.label, room)
             if (!txt) continue
             ctx.globalAlpha = this.isNear(d) ? 0.85 : 0.06
@@ -1525,7 +1566,7 @@ export class Engine {
       const sx = d.x * T.k + T.x
       const sy = d.y * T.k + T.y
       if (sx < -px || sy < -px || sx > W + px || sy > H + px) continue // outside the window
-      const icon = typeIcon(d.icon)
+      const icon = d.pt?.kind === 'milestone' ? milestoneIcon(d.pt.icon) : typeIcon(d.icon)
       if (!icon) continue
       const s = (d.r * ICON_FILL * 2) / 24
       ctx.globalAlpha = this.isNear(d) ? 0.9 : 0.12
@@ -1715,6 +1756,8 @@ export class Engine {
       const titleW = t ? ctx.measureText(t).width : 0
       off = laneW + Math.max(0, titleW / 2 - (g?.r ?? 0)) + 12 / this.T.k
     }
+    // A project timeline: one column of equal width per date, as Mermaid draws it.
+    if (g?.pt) return { w: g.pt.cols.length * (close ? PT_COL * Math.pow(this.T.k / 3, 0.6) : 7), gap: close ? 9 : 4.5, off }
     return { w: close ? 340 * Math.pow(this.T.k / 3, 0.6) : 120, gap: close ? 9 : 4.5, off }
   }
   // History nodes follow their graph: x from the year, y from the lane.
@@ -1740,6 +1783,26 @@ export class Engine {
       let b = boxes.get(d.parent.id)
       if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes, d.parent)))
       const { w, gap, off } = b
+      const pt = d.parent.pt
+      if (pt && d.pt) {
+        // A project timeline: each item at the left of its note in its date's column; a section's
+        // dot at the left end of its band.
+        const colW = w / pt.cols.length
+        const x0 = d.parent.x + d.parent.r + off
+        const top = d.parent.y - ((h.lanes.length - 1) / 2) * gap
+        const left = x0 + (d.hist.year + 0.5 - PT_NOTE / 2) * colW
+        d.pt.right = left + PT_NOTE * colW
+        if (d.pt.kind === 'section') {
+          d.r = gap * 0.16
+          d.x = d.fx = x0 + d.hist.year * colW + gap * 0.4
+          d.y = d.fy = top + PT_BAND * gap
+          continue
+        }
+        d.r = d.pt.kind === 'milestone' ? gap * 0.36 : gap * 0.13
+        d.x = d.fx = left + Math.max(d.r, gap * 0.15) + gap * 0.12
+        d.y = d.fy = top + d.hist.lane * gap
+        continue
+      }
       d.x = d.fx = d.parent.x + d.parent.r + off + histFrac(h.y0, h.y1, h.view, d.hist.year) * w
       d.y = d.fy = d.parent.y + (d.hist.lane - (h.lanes.length - 1) / 2) * gap
       d.r = 2
@@ -1751,7 +1814,7 @@ export class Engine {
   private unpackHistory() {
     const lanes = new Map<string, NodeItem[]>()
     for (const d of this.inner) {
-      if (!d.hist || !d.parent.hist) continue
+      if (!d.hist || !d.parent.hist || d.parent.pt) continue
       const key = d.parent.id + '|' + d.hist.lane
       const l = lanes.get(key)
       if (l) l.push(d)
@@ -1777,6 +1840,10 @@ export class Engine {
     for (const g of this.graphs) {
       const h = g.hist
       if (!h || g.order >= kk) continue
+      if (g.pt) {
+        this.drawProjectTimeline(g)
+        continue
+      }
       const { w, gap, off } = this.histBox(h.lanes, g)
       const x0 = g.x + g.r + off
       const top = g.y - ((h.lanes.length - 1) / 2) * gap
@@ -1829,6 +1896,96 @@ export class Engine {
     }
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)
   }
+  // A project timeline in the style of a Mermaid timeline: the sections as coloured bands on top,
+  // a date box per column with an arrow line under them, a dashed line down each column, and each
+  // event and milestone as a note in its section's colour. The names are written once zoomed in.
+  private drawProjectTimeline(g: GraphItem) {
+    const { ctx, T } = this
+    const h = g.hist!
+    const pt = g.pt!
+    const { w, gap, off } = this.histBox(h.lanes, g)
+    const n = pt.cols.length
+    const colW = w / n
+    const x0 = g.x + g.r + off
+    const top = g.y - ((h.lanes.length - 1) / 2) * gap
+    const near = this.isNear(g)
+    const named = T.k >= 3
+    const color = (c: number) => sectionOf(pt, c)?.color ?? g.color
+    const px = 1 / T.k
+    ctx.save()
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    // Sections: one band over the columns each covers.
+    ctx.font = '600 ' + this.fs(8.5) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    for (const s of pt.sections) {
+      const bx = x0 + s.c0 * colW + px
+      const bw = (s.c1 - s.c0 + 1) * colW - 2 * px
+      const by = top + PT_BAND * gap - gap * 0.42
+      ctx.globalAlpha = near ? 0.85 : 0.08
+      ctx.fillStyle = s.color ?? g.color
+      ctx.fillRect(bx, by, bw, gap * 0.84)
+      if (!named) continue
+      const txt = this.fitText(s.name, bw - gap)
+      if (!txt) continue
+      ctx.globalAlpha = near ? 1 : 0.1
+      ctx.fillStyle = '#0b1220'
+      ctx.fillText(txt, bx + bw / 2, by + gap * 0.43)
+    }
+    // The dashed line down each column, behind the notes.
+    const bottom = top + (h.lanes.length - 1) * gap + gap * 0.55
+    ctx.globalAlpha = near ? 0.35 : 0.05
+    ctx.strokeStyle = '#8fa0b8'
+    ctx.lineWidth = 0.6 * px
+    ctx.setLineDash([3 * px, 3 * px])
+    for (let c = 0; c < n; c++) {
+      const cx = x0 + (c + 0.5) * colW
+      ctx.beginPath()
+      ctx.moveTo(cx, top + PT_DATE * gap + gap * 0.4)
+      ctx.lineTo(cx, bottom)
+      ctx.stroke()
+    }
+    ctx.setLineDash([])
+    // The arrow line between the date boxes and the notes.
+    const ay = top - gap * 0.62
+    ctx.globalAlpha = near ? 0.6 : 0.06
+    ctx.lineWidth = 1.2 * px
+    ctx.beginPath()
+    ctx.moveTo(x0, ay)
+    ctx.lineTo(x0 + w + gap * 0.6, ay)
+    ctx.stroke()
+    ctx.fillStyle = '#8fa0b8'
+    ctx.beginPath()
+    ctx.moveTo(x0 + w + gap * 0.9, ay)
+    ctx.lineTo(x0 + w + gap * 0.5, ay - gap * 0.2)
+    ctx.lineTo(x0 + w + gap * 0.5, ay + gap * 0.2)
+    ctx.closePath()
+    ctx.fill()
+    // A date box per column.
+    ctx.font = '600 ' + this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    for (let c = 0; c < n; c++) {
+      const bx = x0 + (c + 0.5 - PT_NOTE / 2) * colW
+      const by = top + PT_DATE * gap - gap * 0.38
+      ctx.globalAlpha = near ? 0.9 : 0.08
+      ctx.fillStyle = color(c)
+      ctx.fillRect(bx, by, PT_NOTE * colW, gap * 0.76)
+      if (!named) continue
+      const txt = this.fitText(pt.cols[c], PT_NOTE * colW - 2 * px)
+      if (!txt) continue
+      ctx.globalAlpha = near ? 1 : 0.1
+      ctx.fillStyle = '#0b1220'
+      ctx.fillText(txt, bx + (PT_NOTE * colW) / 2, by + gap * 0.39)
+    }
+    // A note behind each event and milestone; a milestone's note is the stronger.
+    for (const d of this.inner) {
+      if (d.parent !== g || !d.pt || !d.hist || d.pt.kind === 'section') continue
+      const bx = x0 + (d.hist.year + 0.5 - PT_NOTE / 2) * colW
+      ctx.globalAlpha = (near ? 1 : 0.1) * (d.pt.kind === 'milestone' ? 0.42 : 0.2)
+      ctx.fillStyle = color(d.hist.year)
+      ctx.fillRect(bx, d.y - gap * 0.4, PT_NOTE * colW, gap * 0.8)
+    }
+    ctx.restore()
+    ctx.lineWidth = 0.6 / Math.sqrt(T.k)
+  }
   // Lane names, drawn last so that names held at the screen's left edge stay above the events.
   private drawHistoryLanes(kk: number) {
     const { ctx, T } = this
@@ -1836,7 +1993,7 @@ export class Engine {
     ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
     for (const g of this.graphs) {
       const h = g.hist
-      if (!h || g.order >= kk) continue
+      if (!h || g.pt || g.order >= kk) continue
       const { w, gap, off } = this.histBox(h.lanes, g)
       ctx.font = this.fs(8) + "px 'IBM Plex Sans',system-ui,sans-serif"
       const x0 = g.x + g.r + off

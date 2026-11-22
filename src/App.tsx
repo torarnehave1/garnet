@@ -52,6 +52,7 @@ import {
   type Option,
 } from './lib/rows'
 import type { Filters, KgNode, Row, Scope, User } from './lib/types'
+import { PT_TYPE } from './lib/projectTimeline'
 
 /* ---------- a chat question's view, set back on the map ---------- */
 // After each build: the time slider to the saved cut and the clicked item, found again by id.
@@ -593,6 +594,17 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
               engine.setHistory(id, by, lanes)
             })
             .catch(() => {})
+        // Project timelines (2026-11-22): graphs holding a project-timeline node. Their dates are
+        // in metadata, which the index does not bring, so each is read whole once (kept for the session).
+        for (const [id, g] of Object.entries(detail as Record<string, { nodes: KgNode[] }>)) {
+          if (!g.nodes.some((n) => n.type === PT_TYPE)) continue
+          loadGraph(u, id)
+            .then((full) => {
+              if (mine !== renderToken.current) return
+              engine.setProjectTimeline(id, full.nodes)
+            })
+            .catch(() => {})
+        }
         // Course step icons (video, PDF or text): read each course graph once, the same way.
         for (const id of engine.graphsWithCourseSteps())
           loadGraph(u, id)
