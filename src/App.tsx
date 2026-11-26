@@ -53,6 +53,7 @@ import {
 } from './lib/rows'
 import type { Filters, KgNode, Row, Scope, User } from './lib/types'
 import { PT_TYPE } from './lib/projectTimeline'
+import { MP_START } from './lib/milestonePlan'
 import { readCards, writeCards } from './lib/cards'
 
 /* ---------- a chat question's view, set back on the map ---------- */
@@ -608,10 +609,21 @@ function Garnet({ user, onSignOut }: { user: User; onSignOut: () => void }) {
             })
             .catch(() => {})
         }
+        // Milestone plans (2026-11-26): graphs holding a milepael-start node. The plan is drawn from
+        // the node types and the edges, and a milestone's status is in metadata: read each whole once.
+        for (const [id, g] of Object.entries(detail as Record<string, { nodes: KgNode[] }>)) {
+          if (!g.nodes.some((n) => n.type === MP_START)) continue
+          loadGraph(u, id)
+            .then((full) => {
+              if (mine !== renderToken.current) return
+              engine.setMilestonePlan(id, full.nodes, full.edges || [])
+            })
+            .catch(() => {})
+        }
         // Card view (2026-11-22): a graph the person chose to see as cards is read whole, as its
         // dates are in metadata; a project timeline keeps its own drawing.
         for (const [id, g] of Object.entries(detail as Record<string, { nodes: KgNode[] }>)) {
-          if (!cardIds.has(id) || g.nodes.some((n) => n.type === PT_TYPE)) continue
+          if (!cardIds.has(id) || g.nodes.some((n) => n.type === PT_TYPE || n.type === MP_START)) continue
           loadGraph(u, id)
             .then((full) => {
               if (mine !== renderToken.current) return

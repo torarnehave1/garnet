@@ -8,9 +8,10 @@ import { INTEREST_COLOR, interestKey } from '../lib/interest'
 import { beat, PULSE_PLAIN, pulseColor, ripples, rippleSpan, utcMs, versionText, type PulseMode } from '../lib/pulse'
 import { colorOf, hash, LOOSE, when } from '../lib/rows'
 import { typeIcon } from '../lib/typeIcons'
-import type { KgGraph, KgNode, Row } from '../lib/types'
+import type { KgEdge, KgGraph, KgNode, Row } from '../lib/types'
 import { layoutTimeline, milestoneIcon, PT_TYPE, sectionOf, type PtKind, type PtLayout, type PtSection } from '../lib/projectTimeline'
 import { layoutCards } from '../lib/cards'
+import { layoutMilestonePlan, MP_LANES, MP_TYPES, type MpPlan } from '../lib/milestonePlan'
 import { SEED } from './seed'
 import { EDGE, histFrac, histTicks, type HistView } from '../lib/historyAxis'
 
@@ -49,7 +50,9 @@ export interface GraphItem extends Base {
   // A project timeline (2026-11-22): drawn as a Mermaid timeline on top of the history-line room.
   // Its dated nodes carry hist too (year = column, lane = row), so the room, the forces and the
   // framing of a history line serve it; only the placing and the drawing are its own.
-  pt?: { cols: string[]; sections: PtSection[]; rows: number; bottom?: number }
+  pt?: { cols: string[]; sections: PtSection[]; rows: number; bottom?: number; mp?: MpPlan }
+  // A milestone plan (2026-11-26) uses the same room with mp set: its three lanes P, S, O are the
+  // columns and its rows the logical order; placeMilestonePlan and drawMilestonePlan are its own.
   // A course (a graph with a kurs-steg node) that has a card image: drawn as a square with that image.
   image: string
   // The graph's header image: drawn inside the circle once the circle is large on screen.
@@ -76,7 +79,7 @@ export interface NodeItem extends Base {
   flow: { row: number; num: number } | null
   hist: { year: number; lane: number } | null
   // A node of a project timeline: what it is there, its milestone icon, and the right edge of its note.
-  pt: { kind: PtKind; icon?: string; right: number; left?: number; top?: number; w?: number; h?: number; lines?: string[] } | null
+  pt: { kind: PtKind | 'mp'; icon?: string; right: number; left?: number; top?: number; w?: number; h?: number; lines?: string[] } | null
   status: StatusKind
   upd: number // when the node's content last changed (ms), 0 when the server gave no time
 }
@@ -165,6 +168,15 @@ const PT_GAP = 9 // a row's height in map units
 const PT_FONT = 3.2 // the notes' text in map units (the band and dates a little larger)
 const PT_READ_PX = 5 // text is written once it is at least this tall on the screen
 const PT_ROW = 2.6 // a row of notes, in gaps: room for its text on up to three lines
+// A milestone plan, in map units and gaps: a lane's width, how much of it a box fills, a row's step
+// and a box's height in gaps, and the lane heads above the first row.
+const MP_COL = 44
+const MP_BOX = 0.84
+const MP_ROW = 2.75
+const MP_BOX_H = 2.15
+const MP_HEAD = 2.75
+// The width of a timeline-like graph on the map: a column per date, or the three lanes of a plan.
+const ptWidth = (pt: { cols: string[]; mp?: MpPlan }) => (pt.mp ? MP_LANES.length * MP_COL : pt.cols.length * PT_COL)
 const ICON_MIN_PX = 9 // A node this many pixels in radius, or more, shows its type icon.
 const ICON_FILL = 0.68 // How much of the node the icon fills (1 = edge to edge).
 const SPREAD_K = 12 // From this zoom (as the Zoom chip shows it), node names spread out.
@@ -516,7 +528,7 @@ export class Engine {
         }
         // Choosing the type history-line means showing the history lines: their events are other
         // types, so the whole graph is kept.
-        const nodesIn = only && type !== '*' && type !== 'history-line' && type !== PT_TYPE ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
+        const nodesIn = only && type !== '*' && type !== 'history-line' && type !== PT_TYPE && !MP_TYPES.has(type) ? d.nodes.filter((n) => (n.type || '') === type) : d.nodes
         nodesIn.forEach((n, i) => {
           const a = i * 2.39996
           const o: NodeItem = {
@@ -701,6 +713,30 @@ export class Engine {
   // project timeline's machinery. nodes: the graph read whole, as the dates are in metadata.
   setCards(graphId: string, nodes: KgNode[]) {
     this.setTimelineLayout(graphId, layoutCards(nodes))
+  }
+  // A milestone plan (lib/milestonePlan.ts): lanes P, S, O, rows from the logical dependencies.
+  // nodes, edges: the graph read whole, as the milestones' status is in metadata.
+  setMilestonePlan(graphId: string, nodes: KgNode[], edges: KgEdge[]) {
+    const g = this.graphs.find((x) => x.id === graphId)
+    const plan = layoutMilestonePlan(nodes, edges)
+    if (!g || !plan) return
+    const mine = this.inner.filter((o) => o.parent.id === graphId && plan.items[o.nid])
+    if (!mine.length) return
+    g.pt = { cols: MP_LANES.map((l) => l.key), sections: [], rows: plan.rows, mp: plan }
+    // The room: as many gaps as the rows and their boxes need.
+    const tall = (plan.rows - 1) * MP_ROW + MP_BOX_H
+    g.hist = { y0: 0, y1: 2, lanes: new Array(Math.ceil(tall) + 1).fill('') }
+    for (const o of mine) {
+      const it = plan.items[o.nid]
+      o.hist = { year: Math.max(0, it.lane), lane: it.row }
+      o.pt = { kind: 'mp', right: 0 }
+      o.color = it.lane >= 0 ? MP_LANES[it.lane].color : '#e8eef7'
+    }
+    for (let i = this.containLinks.length - 1; i >= 0; i--) if ((this.containLinks[i].source as NodeItem).hist) this.containLinks.splice(i, 1)
+    const sim = this.sim
+    if (!sim) return
+    ;(sim.force('contain') as ReturnType<typeof forceLink<Item, Link>> | undefined)?.links(this.containLinks)
+    sim.alpha(Math.max(sim.alpha(), 0.1)).restart()
   }
   private setTimelineLayout(graphId: string, lay: PtLayout | null) {
     const g = this.graphs.find((x) => x.id === graphId)
@@ -967,7 +1003,7 @@ export class Engine {
     if (this.T.k < 3) {
       const gap = 9
       const top = g.y - ((h.lanes.length - 1) / 2) * gap
-      b = { x0: g.x + g.r + 10, w: g.pt ? g.pt.cols.length * PT_COL : 340, gap, top, bottom: top + (h.lanes.length - 1) * gap }
+      b = { x0: g.x + g.r + 10, w: g.pt ? ptWidth(g.pt) : 340, gap, top, bottom: top + (h.lanes.length - 1) * gap }
     }
     const pad = 10 / this.T.k
     const loose = this.inner.filter((o) => o.parent === g && !o.hist && !o.flow).length
@@ -1254,6 +1290,8 @@ export class Engine {
         const hl = l.source.hist && l.target.hist
         // A project timeline's section stands in its band: an edge to it would cut across the band.
         if ((l.source as NodeItem).pt?.kind === 'section' || (l.target as NodeItem).pt?.kind === 'section') continue
+        // A milestone plan draws its dependencies itself, solid or dashed (drawMilestonePlan).
+        if ((l.source as NodeItem).pt?.kind === 'mp' && (l.target as NodeItem).pt?.kind === 'mp') continue
         ctx.globalAlpha = sel ? (touches(l) ? 0.9 : 0.04) : hl ? 0.14 : 0.4
         line(l.source, l.target)
       }
@@ -1783,7 +1821,7 @@ export class Engine {
       off = laneW + Math.max(0, titleW / 2 - (g?.r ?? 0)) + 12 / this.T.k
     }
     // A project timeline: one column of equal width per date, as Mermaid draws it.
-    if (g?.pt) return { w: g.pt.cols.length * PT_COL, gap: PT_GAP, off: 10 }
+    if (g?.pt) return { w: ptWidth(g.pt), gap: PT_GAP, off: 10 }
     return { w: close ? 340 * Math.pow(this.T.k / 3, 0.6) : 120, gap: close ? 9 : 4.5, off }
   }
   // History nodes follow their graph: x from the year, y from the lane.
@@ -1810,6 +1848,10 @@ export class Engine {
       if (!b) boxes.set(d.parent.id, (b = this.histBox(h.lanes, d.parent)))
       const { w, gap, off } = b
       const pt = d.parent.pt
+      if (pt?.mp && d.pt?.kind === 'mp') {
+        this.placeMilestone(d, pt.mp, w, gap, off)
+        continue
+      }
       if (pt && d.pt) {
         // A project timeline: each item at the left of its note in its date's column; a section's
         // dot at the left end of its band.
@@ -1843,7 +1885,7 @@ export class Engine {
     const { ctx } = this
     const cols = new Map<string, NodeItem[]>()
     for (const d of this.inner) {
-      if (!d.pt || !d.hist || d.pt.kind === 'section' || !d.parent.pt) continue
+      if (!d.pt || !d.hist || d.pt.kind === 'section' || !d.parent.pt || d.parent.pt.mp) continue
       const key = d.parent.id + '|' + d.hist.year
       const l = cols.get(key)
       if (l) l.push(d)
@@ -1915,7 +1957,8 @@ export class Engine {
       const h = g.hist
       if (!h || g.order >= kk) continue
       if (g.pt) {
-        this.drawProjectTimeline(g)
+        if (g.pt.mp) this.drawMilestonePlan(g, g.pt.mp)
+        else this.drawProjectTimeline(g)
         continue
       }
       const { w, gap, off } = this.histBox(h.lanes, g)
@@ -2074,6 +2117,159 @@ export class Engine {
       const cx = p.left! + iconW + (p.w! - iconW) / 2
       const y0 = p.top + p.h! / 2 - ((p.lines.length - 1) / 2) * lh
       p.lines.forEach((t, i) => ctx.fillText(t, cx, y0 + i * lh))
+    }
+    ctx.restore()
+    ctx.lineWidth = 0.6 / Math.sqrt(T.k)
+  }
+  // A milestone of a plan: its box in its lane at its row; the start and the end span the lanes.
+  private placeMilestone(d: NodeItem, plan: MpPlan, w: number, gap: number, off: number) {
+    const g = d.parent
+    const it = plan.items[d.nid]
+    const p = d.pt!
+    const x0 = g.x + g.r + off
+    const top = g.y - ((g.hist!.lanes.length - 1) / 2) * gap
+    const span = it.lane < 0
+    const bw = span ? MP_COL * 1.7 : MP_COL * MP_BOX
+    const left = span ? x0 + w / 2 - bw / 2 : x0 + it.lane * MP_COL + (MP_COL - bw) / 2
+    const h = (span ? MP_BOX_H * 0.8 : MP_BOX_H) * gap
+    const y = top + it.row * MP_ROW * gap
+    p.left = left
+    p.top = y
+    p.w = bw
+    p.h = h
+    p.right = left + bw
+    const lh = PT_FONT * 1.3
+    this.ctx.font = (span ? '600 ' + PT_FONT * 1.15 : PT_FONT) + "px 'IBM Plex Sans',system-ui,sans-serif"
+    p.lines = this.wrapText(d.label, bw - lh * 0.9, span ? 1 : 3)
+    d.r = Math.min(bw, h) * 0.45
+    d.x = d.fx = left + bw / 2
+    d.y = d.fy = y + h / 2
+  }
+  // A milestone plan as Tor Arne drew it (2026-11-26): a lane each for P, S and O with its head on
+  // top, the start above and the end below spanning the lanes, a solid arrow for a dependency within
+  // a lane, a dashed one across lanes, a thin line to and from the start and the end. A milestone
+  // that is reached is filled with its lane's colour.
+  private drawMilestonePlan(g: GraphItem, plan: MpPlan) {
+    const { ctx, T } = this
+    const h = g.hist!
+    const { gap, off } = this.histBox(h.lanes, g)
+    const x0 = g.x + g.r + off
+    const top = g.y - ((h.lanes.length - 1) / 2) * gap
+    const near = this.isNear(g)
+    const a = near ? 1 : 0.1
+    const named = PT_FONT * T.k >= PT_READ_PX
+    const px = 1 / T.k
+    const headTop = top - MP_HEAD * gap
+    const bottom = top + ((plan.rows - 1) * MP_ROW + MP_BOX_H + 0.4) * gap
+    ctx.save()
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    // The lanes: a pale field and a coloured head with the letter and the name.
+    MP_LANES.forEach((l, i) => {
+      const lx = x0 + i * MP_COL + px * 2
+      const lw = MP_COL - px * 4
+      ctx.globalAlpha = near ? 0.1 : 0.03
+      ctx.fillStyle = l.color
+      ctx.fillRect(lx, headTop, lw, bottom - headTop)
+      ctx.globalAlpha = near ? 0.95 : 0.08
+      ctx.fillRect(lx, headTop, lw, gap * 1.9)
+      if (!named) return
+      ctx.globalAlpha = a
+      ctx.fillStyle = '#ffffff'
+      ctx.font = '700 ' + PT_FONT * 1.7 + "px 'IBM Plex Sans',system-ui,sans-serif"
+      ctx.fillText(l.key, lx + lw / 2, headTop + gap * 0.72)
+      ctx.font = '600 ' + PT_FONT * 0.95 + "px 'IBM Plex Sans',system-ui,sans-serif"
+      const t = this.fitText(l.name, lw - gap * 0.4)
+      if (t) ctx.fillText(t, lx + lw / 2, headTop + gap * 1.45)
+    })
+    const by = new Map<string, NodeItem>()
+    for (const d of this.inner) if (d.parent === g && d.pt?.kind === 'mp' && d.pt.top != null) by.set(d.nid, d)
+    // The dependencies, behind the boxes.
+    const head = (x: number, y: number, ang: number, size: number) => {
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.lineTo(x - Math.cos(ang - 0.45) * size, y - Math.sin(ang - 0.45) * size)
+      ctx.lineTo(x - Math.cos(ang + 0.45) * size, y - Math.sin(ang + 0.45) * size)
+      ctx.closePath()
+      ctx.fill()
+    }
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+    for (const dep of plan.deps) {
+      const A = by.get(dep.s)?.pt
+      const B = by.get(dep.t)?.pt
+      if (!A || !B || A.top == null || B.top == null) continue
+      const ia = plan.items[dep.s]
+      const ib = plan.items[dep.t]
+      const ax = A.left! + A.w! / 2
+      const bx = B.left! + B.w! / 2
+      if (dep.kind === 'x') {
+        const right = ib.lane > ia.lane
+        const x1 = right ? A.right : A.left!
+        const y1 = A.top + A.h! * 0.62
+        const x2 = right ? B.left! + B.w! * 0.12 : B.right - B.w! * 0.12
+        const y2 = B.top - px
+        const c2y = y2 - MP_ROW * gap * 0.45
+        ctx.globalAlpha = near ? 0.85 : 0.06
+        ctx.strokeStyle = ctx.fillStyle = '#c8d2e0'
+        ctx.lineWidth = Math.max(0.3, 1.3 * px)
+        ctx.setLineDash([gap * 0.32, gap * 0.22])
+        ctx.beginPath()
+        ctx.moveTo(x1, y1)
+        ctx.bezierCurveTo(x1 + (right ? 1 : -1) * MP_COL * 0.22, y1 + gap * 0.1, x2, c2y, x2, y2)
+        ctx.stroke()
+        ctx.setLineDash([])
+        head(x2, y2, Math.PI / 2, gap * 0.34)
+        continue
+      }
+      let x1 = ax
+      let x2 = bx
+      if (dep.kind === 'end') {
+        if (ia.lane < 0) x1 = clamp(bx, A.left! + gap, A.right - gap)
+        if (ib.lane < 0) x2 = clamp(ax, B.left! + gap, B.right - gap)
+      }
+      const y1 = A.top + A.h!
+      const y2 = B.top - px
+      ctx.globalAlpha = near ? (dep.kind === 'end' ? 0.5 : 0.9) : 0.06
+      ctx.strokeStyle = ctx.fillStyle = dep.kind === 'end' ? '#8fa0b8' : '#c8d2e0'
+      ctx.lineWidth = dep.kind === 'end' ? Math.max(0.2, 0.8 * px) : Math.max(0.3, 1.4 * px)
+      ctx.beginPath()
+      ctx.moveTo(x1, y1)
+      ctx.lineTo(x2, y2)
+      ctx.stroke()
+      head(x2, y2, Math.atan2(y2 - y1, x2 - x1), gap * (dep.kind === 'end' ? 0.26 : 0.34))
+    }
+    // The boxes: the start and the end light with dark text, a milestone outlined in its lane's
+    // colour with its code (P1 …) in the corner; filled when it is reached.
+    const lh = PT_FONT * 1.3
+    for (const [nid, d] of by) {
+      const p = d.pt!
+      const it = plan.items[nid]
+      const span = it.lane < 0
+      const col = span ? '#e8eef7' : MP_LANES[it.lane].color
+      ctx.globalAlpha = a
+      ctx.beginPath()
+      ctx.roundRect(p.left!, p.top!, p.w!, p.h!, gap * 0.28)
+      ctx.fillStyle = span ? '#e8eef7' : it.done ? col : '#f8fafc'
+      ctx.fill()
+      if (!span) {
+        ctx.strokeStyle = col
+        ctx.lineWidth = gap * 0.12
+        ctx.stroke()
+      }
+      if (!named || !p.lines?.length) continue
+      const dark = span || !it.done
+      if (!span) {
+        ctx.textAlign = 'left'
+        ctx.font = '700 ' + PT_FONT * 0.85 + "px 'IBM Plex Sans',system-ui,sans-serif"
+        ctx.fillStyle = dark ? col : '#ffffff'
+        ctx.fillText(it.code + (it.done ? ' ✓' : ''), p.left! + lh * 0.45, p.top! + lh * 0.6)
+        ctx.textAlign = 'center'
+      }
+      ctx.font = (span ? '700 ' + PT_FONT * 1.15 : '500 ' + PT_FONT) + "px 'IBM Plex Sans',system-ui,sans-serif"
+      ctx.fillStyle = dark ? '#1f2937' : '#ffffff'
+      const cy = span ? p.top! + p.h! / 2 : p.top! + lh * 0.95 + (p.h! - lh * 0.95) / 2
+      const y0 = cy - ((p.lines.length - 1) / 2) * lh
+      p.lines.forEach((t, i) => ctx.fillText(t, p.left! + p.w! / 2, y0 + i * lh))
     }
     ctx.restore()
     ctx.lineWidth = 0.6 / Math.sqrt(T.k)

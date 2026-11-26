@@ -15,6 +15,9 @@ import {
   CreditCard,
   Database,
   FileText,
+  Flag,
+  Handshake,
+  Milestone,
   ChartGantt,
   GraduationCap,
   Heading,
@@ -96,6 +99,12 @@ const ICONS: Record<string, IconNode> = {
   // Project timelines (2026-11-22): the header and its periods. A milestone draws its own icon.
   'project-timeline': ChartGantt,
   'project-timeline-section': Rows3,
+  // Milestone plans (2026-11-26): the start, the end and the milestones of the three PSO paths.
+  'milepael-start': Handshake,
+  'milepael-slutt': Flag,
+  'milepael-p': Milestone,
+  'milepael-s': Milestone,
+  'milepael-o': Milestone,
   map: MapIcon,
   swot: LayoutGrid,
   oppgave: Check,
