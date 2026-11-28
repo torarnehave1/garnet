@@ -11,7 +11,7 @@ import { typeIcon } from '../lib/typeIcons'
 import type { KgEdge, KgGraph, KgNode, Row } from '../lib/types'
 import { layoutTimeline, milestoneIcon, PT_TYPE, sectionOf, type PtKind, type PtLayout, type PtSection } from '../lib/projectTimeline'
 import { layoutCards } from '../lib/cards'
-import { layoutMilestonePlan, MP_LANES, MP_TYPES, type MpPlan } from '../lib/milestonePlan'
+import { layoutMilestonePlan, MP_BOX_H, MP_LANES, MP_ROW, MP_TYPES, type MpPlan } from '../lib/milestonePlan'
 import { SEED } from './seed'
 import { EDGE, histFrac, histTicks, type HistView } from '../lib/historyAxis'
 
@@ -168,12 +168,10 @@ const PT_GAP = 9 // a row's height in map units
 const PT_FONT = 3.2 // the notes' text in map units (the band and dates a little larger)
 const PT_READ_PX = 5 // text is written once it is at least this tall on the screen
 const PT_ROW = 2.6 // a row of notes, in gaps: room for its text on up to three lines
-// A milestone plan, in map units and gaps: a lane's width, how much of it a box fills, a row's step
-// and a box's height in gaps, and the lane heads above the first row.
+// A milestone plan, in map units and gaps: a lane's width, how much of it a box fills, and the lane
+// heads above the first row. A row's step and a box's height are in lib/milestonePlan.ts.
 const MP_COL = 44
 const MP_BOX = 0.84
-const MP_ROW = 2.75
-const MP_BOX_H = 2.15
 const MP_HEAD = 2.75
 // The width of a timeline-like graph on the map: a column per date, or the three lanes of a plan.
 const ptWidth = (pt: { cols: string[]; mp?: MpPlan }) => (pt.mp ? MP_LANES.length * MP_COL : pt.cols.length * PT_COL)
@@ -724,7 +722,7 @@ export class Engine {
     if (!mine.length) return
     g.pt = { cols: MP_LANES.map((l) => l.key), sections: [], rows: plan.rows, mp: plan }
     // The room: as many gaps as the rows and their boxes need.
-    const tall = (plan.rows - 1) * MP_ROW + MP_BOX_H
+    const tall = plan.height
     g.hist = { y0: 0, y1: 2, lanes: new Array(Math.ceil(tall) + 1).fill('') }
     for (const o of mine) {
       const it = plan.items[o.nid]
@@ -2132,7 +2130,7 @@ export class Engine {
     const bw = span ? MP_COL * 1.7 : MP_COL * MP_BOX
     const left = span ? x0 + w / 2 - bw / 2 : x0 + it.lane * MP_COL + (MP_COL - bw) / 2
     const h = (span ? MP_BOX_H * 0.8 : MP_BOX_H) * gap
-    const y = top + it.row * MP_ROW * gap
+    const y = top + it.y * gap
     p.left = left
     p.top = y
     p.w = bw
@@ -2160,7 +2158,7 @@ export class Engine {
     const named = PT_FONT * T.k >= PT_READ_PX
     const px = 1 / T.k
     const headTop = top - MP_HEAD * gap
-    const bottom = top + ((plan.rows - 1) * MP_ROW + MP_BOX_H + 0.4) * gap
+    const bottom = top + (plan.height + 0.4) * gap
     ctx.save()
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -2232,6 +2230,48 @@ export class Engine {
       ctx.globalAlpha = near ? (dep.kind === 'end' ? 0.5 : 0.9) : 0.06
       ctx.strokeStyle = ctx.fillStyle = dep.kind === 'end' ? '#8fa0b8' : '#c8d2e0'
       ctx.lineWidth = dep.kind === 'end' ? Math.max(0.2, 0.8 * px) : Math.max(0.3, 1.4 * px)
+      // A straight line that would pass behind another box (a milestone stacked in the same lane)
+      // would look like a dependency it is not. It runs instead down the lane's left margin and
+      // enters the box from the side (2026-11-28).
+      let hidden = false
+      for (const [id, o] of by) {
+        const q = o.pt!
+        if (id === dep.s || id === dep.t || q.top == null) continue
+        if (Math.min(x1, x2) < q.right && Math.max(x1, x2) > q.left! && q.top < y2 && q.top + q.h! > y1) {
+          hidden = true
+          break
+        }
+      }
+      if (hidden) {
+        const lane = ib.lane >= 0 ? ib.lane : ia.lane
+        const gx = x0 + lane * MP_COL + (MP_COL * (1 - MP_BOX)) / 4
+        const jog = gap * 0.35
+        ctx.beginPath()
+        if (ia.lane < 0) {
+          const sx = clamp(gx, A.left! + gap, A.right - gap)
+          ctx.moveTo(sx, y1)
+          ctx.lineTo(sx, y1 + jog)
+          ctx.lineTo(gx, y1 + jog)
+        } else {
+          ctx.moveTo(A.left!, A.top + A.h! / 2)
+          ctx.lineTo(gx, A.top + A.h! / 2)
+        }
+        if (ib.lane < 0) {
+          const tx = clamp(gx, B.left! + gap, B.right - gap)
+          ctx.lineTo(gx, y2 - jog)
+          ctx.lineTo(tx, y2 - jog)
+          ctx.lineTo(tx, y2)
+          ctx.stroke()
+          head(tx, y2, Math.PI / 2, gap * (dep.kind === 'end' ? 0.26 : 0.34))
+        } else {
+          const ty = B.top + B.h! / 2
+          ctx.lineTo(gx, ty)
+          ctx.lineTo(B.left! - px, ty)
+          ctx.stroke()
+          head(B.left! - px, ty, 0, gap * (dep.kind === 'end' ? 0.26 : 0.34))
+        }
+        continue
+      }
       ctx.beginPath()
       ctx.moveTo(x1, y1)
       ctx.lineTo(x2, y2)

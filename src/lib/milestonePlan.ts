@@ -25,13 +25,20 @@ export const MP_LANES = [
 ] as const
 export const MP_TYPES = new Set<string>([MP_START, MP_END, ...MP_LANES.map((l) => l.type)])
 
+// Vertical layout, in gaps: a row's step, a box's height, and the space between two milestones
+// stacked in the same lane and row.
+export const MP_ROW = 2.75
+export const MP_BOX_H = 2.15
+export const MP_STACK = 0.35
+
 export type MpKind = 'start' | 'ms' | 'end'
 export type MpDep = 'in' | 'x' | 'end'
 export interface MpPlan {
   rows: number // rows from the start (row 0) to the end (the last row)
+  height: number // gaps from the top of row 0 to the foot of the lowest box
   // Each placed node: its lane (0 P, 1 S, 2 O; -1 for start and end, which span the lanes), its row,
-  // what it is, its code (P1, S2 …), and whether it is reached.
-  items: Record<string, { lane: number; row: number; kind: MpKind; code: string; done: boolean }>
+  // its top in gaps from the top of row 0, what it is, its code (P1, S2 …), and whether it is reached.
+  items: Record<string, { lane: number; row: number; y: number; kind: MpKind; code: string; done: boolean }>
   deps: { s: string; t: string; kind: MpDep }[]
 }
 
@@ -89,9 +96,34 @@ export function layoutMilestonePlan(nodes: KgNode[], edges: KgEdge[]): MpPlan | 
   for (const [lane, l] of MP_LANES.entries()) {
     const ids = [...kinds].filter(([, k]) => k.kind === 'ms' && k.lane === lane).map(([id]) => id)
     ids.sort((a, b) => row.get(a)! - row.get(b)! || byNode.get(a)! - byNode.get(b)!)
-    ids.forEach((id, i) => (items[id] = { lane, row: row.get(id)!, kind: 'ms', code: l.key + (i + 1), done: false }))
+    ids.forEach((id, i) => (items[id] = { lane, row: row.get(id)!, kind: 'ms', y: 0, code: l.key + (i + 1), done: false }))
   }
-  for (const [id, k] of kinds) if (k.kind !== 'ms') items[id] = { lane: -1, row: row.get(id)!, kind: k.kind, code: '', done: false }
+  for (const [id, k] of kinds) if (k.kind !== 'ms') items[id] = { lane: -1, row: row.get(id)!, y: 0, kind: k.kind, code: '', done: false }
   for (const n of nodes) if (items[n.id]) items[n.id].done = reached(n.metadata?.status)
-  return { rows: Math.max(...Object.values(items).map((x) => x.row)) + 1, items, deps }
+  const rows = Math.max(...Object.values(items).map((x) => x.row)) + 1
+  // Milestones in the same lane and row are parallel. They stack inside the row, in code order,
+  // instead of covering each other (2026-11-28), and a row grows to its fullest lane.
+  const groups = new Map<string, string[]>()
+  for (const [id, it] of Object.entries(items)) {
+    const k = it.row + ':' + it.lane
+    const gr = groups.get(k)
+    if (gr) gr.push(id)
+    else groups.set(k, [id])
+  }
+  const num = (id: string) => Number(items[id].code.slice(1)) || 0
+  const slots = new Array<number>(rows).fill(1)
+  for (const [k, gr] of groups) {
+    gr.sort((a, b) => num(a) - num(b))
+    const r = Number(k.split(':')[0])
+    slots[r] = Math.max(slots[r], gr.length)
+  }
+  const rowTop: number[] = []
+  let y = 0
+  for (let r = 0; r < rows; r++) {
+    rowTop[r] = y
+    y += slots[r] * MP_BOX_H + (slots[r] - 1) * MP_STACK + (MP_ROW - MP_BOX_H)
+  }
+  for (const gr of groups.values()) gr.forEach((id, i) => (items[id].y = rowTop[items[id].row] + i * (MP_BOX_H + MP_STACK)))
+  const height = Math.max(...Object.values(items).map((x) => x.y)) + MP_BOX_H
+  return { rows, height, items, deps }
 }
